@@ -23,7 +23,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'grasp = grasp.grasp:main'
+            'grasp = grasp.grasp:main',
+            'pose_reach = grasp.pose_reach:main'
         ],
     },
 )
