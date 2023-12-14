@@ -1,3 +1,5 @@
+import time
+
 import rclpy
 
 from .tf_reader import TF_Reader
@@ -13,12 +15,11 @@ def main():
         while (tf_reader.get_arm_to_cam() == None):
             rclpy.spin_once(tf_reader)
         
-        # start controller
-        controller = ArmController(tf_reader)
-        rclpy.spin(controller)
+        arm_controller = ArmController(tf_reader)
+        rclpy.spin(arm_controller)
     finally:
         tf_reader.destroy_node()
-        controller.destroy_node()
+        arm_controller.destroy_node()
         rclpy.shutdown()
 
 

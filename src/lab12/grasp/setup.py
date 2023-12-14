@@ -24,7 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'grasp = grasp.grasp:main',
-            'pose_reach = grasp.pose_reach:main'
+            'motion = grasp.motion:main'
         ],
     },
 )

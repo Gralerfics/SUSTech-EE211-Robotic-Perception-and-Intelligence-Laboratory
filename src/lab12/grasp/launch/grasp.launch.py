@@ -1,16 +1,18 @@
 import os
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 def generate_launch_description():
-
     aruco_params = os.path.join(
         get_package_share_directory('ros2_aruco'),
-            'config',
-            'aruco_parameters.yaml'
-        )
+        'config',
+        'aruco_parameters.yaml'
+    )
 
     aruco_node = Node(
         package='ros2_aruco',
@@ -22,9 +24,15 @@ def generate_launch_description():
         package='grasp',
         executable='grasp'
     )
-
+    
+    motion_node = Node(
+        package='grasp',
+        executable='motion'
+    )
+    
     return LaunchDescription([
         aruco_node,
-        grasp_node
+        grasp_node,
+        motion_node
     ])
 

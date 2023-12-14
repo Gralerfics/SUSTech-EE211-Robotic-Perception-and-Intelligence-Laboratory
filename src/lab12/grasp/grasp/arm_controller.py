@@ -28,7 +28,8 @@ class ArmController(Node):
         self.group_pub = self.create_publisher(JointGroupCommand, '/px100/commands/joint_group', 10)
         self.pantil_pub = self.create_publisher(PanTiltCmdDeg, '/pan_tilt_cmd_deg', 10)
         self.fb_sub = self.create_subscription(JointState, '/joint_states', self.joint_states_callback, 10)
-        self.pub_timer = self.create_timer(0.2, self.fsm_timer_callback)
+        
+        self.timer = self.create_timer(0.2, self.fsm_timer_callback)
 
         self.robot_des: mrd.ModernRoboticsDescription = getattr(mrd, 'px100')
         self.arm_command = JointSingleCommand()
@@ -65,11 +66,11 @@ class ArmController(Node):
         self.grasp_is_holding_srv = self.create_service(GraspQuery, 'grasp_is_holding', self.grasp_is_holding_callback)
         self.is_solved = False
         self.allow_execute_trigger = False
-
+    
     def grasp_action_callback(self, request, response): # reset, grasp, release
         if request.action == 'reset':
             self.machine_state = 'INIT'
-        elif request.action == 'grasp':
+        elif request.action == 'grasp': # must be called after 'reset'
             self.allow_execute_trigger = True
         elif request.action == 'release':
             self.machine_state = 'RELEASE'
@@ -160,14 +161,10 @@ class ArmController(Node):
         return mr.FKinSpace(self.robot_des.M, self.robot_des.Slist, joint_state)
 
     def go_home(self):
-        state = self.set_group_pos([1.57, self.shoulder_offset, 1.5, -1.5])
-        return state
+        return self.set_group_pos([1.57, self.shoulder_offset, 1.5, -1.5])
     
-    def go_hold(self):
-        state = self.set_group_pos([0.0, self.shoulder_offset, -1.5, 0.0])
-        time.sleep(0.2)
-        state = self.set_group_pos([0.0, self.shoulder_offset, -1.4, 0.0])
-        return state
+    def go_handup(self):
+        return self.set_group_pos([1.5, self.shoulder_offset, -1.4, 0.0])
 
     def matrix_control(self, T_sd, custom_guess: list[float] = None, execute: bool = True, custom_joints = None, delay = 1.0):
         initial_guesses = self.initial_guesses if custom_guess is None else [custom_guess]
@@ -339,6 +336,7 @@ class ArmController(Node):
                             self.machine_state = 'TWIST_WAIST'
             elif self.machine_state == 'TWIST_WAIST':
                 self.get_logger().info('twisting waist ...')
+                self.gripper(1.5, 1.0)
                 _, solution_found, solution_valid, reached = self.matrix_control(
                     self.action_matrix,
                     custom_joints = [None, self.shoulder_offset, -1.4, 0.0],
@@ -356,11 +354,14 @@ class ArmController(Node):
                     self.machine_state = 'HAND_UP'
             elif self.machine_state == 'HAND_UP':
                 self.get_logger().info('handing up ...')
-                if self.go_hold():
+                if self.go_handup():
                     self.get_logger().info('done.')
                     self.machine_state = 'HOLD'
             elif self.machine_state == 'HOLD':
                 self.get_logger().info('holding ...')
+                if self.go_home():
+                    self.get_logger().info('done.')
+                    # TODO
             elif self.machine_state == 'RELEASE':
                 pass
             else:
