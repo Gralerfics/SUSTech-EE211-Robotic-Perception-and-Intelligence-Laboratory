@@ -184,6 +184,13 @@ class ArmController(Node):
             time.sleep(delay)
             return gripper_state
 
+    def pan_tilt(self, pitch, yaw, speed):
+        pan_tilt_deg_cmd = PanTiltCmdDeg()
+        pan_tilt_deg_cmd.pitch = pitch
+        pan_tilt_deg_cmd.yaw = yaw
+        pan_tilt_deg_cmd.speed = speed
+        self.pantil_pub.publish(pan_tilt_deg_cmd)
+
     def _wrap_theta_list(self, theta_list: list[np.ndarray]) -> list[np.ndarray]:
         # to [-pi, pi], TODO: not verified
         REV = 2 * np.pi
@@ -228,13 +235,8 @@ class ArmController(Node):
         
         if len(self.joint_pos) == 7:
             if self.machine_state == 'INIT':
-                self.get_logger().info('initializing ...')
-                pan_tilt_deg_cmd = PanTiltCmdDeg()
-                pan_tilt_deg_cmd.pitch = 15.0
-                pan_tilt_deg_cmd.yaw = 0.0
-                pan_tilt_deg_cmd.speed = 10
-                self.pantil_pub.publish(pan_tilt_deg_cmd)
-                
+                self.get_logger().info('initializing pan tilt and arm ...')
+                self.pan_tilt(pitch = 15.0, yaw = 0.0, speed = 10)
                 if self.go_home() and self.gripper(1.5, 0.5):
                     self.get_logger().info('done.')
                     self.machine_state = 'DETECT'
