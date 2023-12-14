@@ -1,3 +1,8 @@
 {
-    "cmake.sourceDirectory": "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/src/testpkgcpp"
+    "python.analysis.extraPaths": [
+        "./install/grasp_interfaces/local/lib/python3.10/dist-packages/"
+    ],
+    "python.autoComplete.extraPaths": [
+        "./install/grasp_interfaces/local/lib/python3.10/dist-packages/"
+    ]
 }

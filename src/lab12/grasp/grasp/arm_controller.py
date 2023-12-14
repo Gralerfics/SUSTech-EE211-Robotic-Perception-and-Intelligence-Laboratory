@@ -15,9 +15,12 @@ import modern_robotics as mr
 import tf_transformations
 import numpy as np
 
+from grasp_interfaces.srv import GraspAction, GraspQuery
+
 
 class ArmController(Node):
     def __init__(self, tf_reader):
+        # [ arm controller ]
         super().__init__('ArmController')
         self.tf_reader = tf_reader
         
@@ -46,7 +49,7 @@ class ArmController(Node):
 
         self.shoulder_offset = -0.05 # gravity compensation
 
-        # === application ===
+        # [ application ]
         self.arm_target_pose_pub = self.create_publisher(PoseStamped, '/arm_target_pose', 10)
         self.aruco_target_pose_pub = self.create_publisher(PoseStamped, '/aruco_target_pose', 10)
         self.block_center_pose_pub = self.create_publisher(PoseStamped, '/block_center_pose', 10)
@@ -54,10 +57,37 @@ class ArmController(Node):
         
         self.block_length = 0.04
         self.aruco_expired_time = 1.0
-        # service
         self.aruco_poses = None
         self.machine_state = 'INIT'
-    
+        
+        self.grasp_action_srv = self.create_service(GraspAction, 'grasp_action', self.grasp_action_callback)
+        self.grasp_is_solved_srv = self.create_service(GraspQuery, 'grasp_is_solved', self.grasp_is_solved_callback)
+        self.grasp_is_holding_srv = self.create_service(GraspQuery, 'grasp_is_holding', self.grasp_is_holding_callback)
+        self.is_solved = False
+        self.allow_execute_trigger = False
+
+    def grasp_action_callback(self, request, response): # reset, grasp, release
+        if request.action == 'reset':
+            self.machine_state = 'INIT'
+        elif request.action == 'grasp':
+            self.allow_execute_trigger = True
+        elif request.action == 'release':
+            self.machine_state = 'RELEASE'
+        
+        response.result = True
+        self.get_logger().info(f'grasp_action({request.action}) called -> {response.result}')
+        return response
+
+    def grasp_is_solved_callback(self, request, response):
+        response.result = self.is_solved
+        self.get_logger().info(f'grasp_is_solved() called -> {response.result}')
+        return response
+
+    def grasp_is_holding_callback(self, request, response):
+        response.result = (self.machine_state == 'HOLD')
+        self.get_logger().info(f'grasp_is_holding() called -> {response.result}')
+        return response
+
     def joint_states_callback(self, msg):
         if len(msg.name) == 7:
             self.joint_pos.clear()
@@ -240,7 +270,11 @@ class ArmController(Node):
                 if self.go_home() and self.gripper(1.5, 0.5):
                     self.get_logger().info('done.')
                     self.machine_state = 'DETECT'
+                    
                     self.valid_times = 0
+                    self.is_solved = False
+                    self.allow_execute_trigger = False
+                    
                     time.sleep(1.0)
             elif self.machine_state == 'DETECT':
                 current_aruco_pose = self.get_active_aruco_pose()
@@ -294,10 +328,14 @@ class ArmController(Node):
                     # Test solution
                     _, solution_found, solution_valid, reached = self.matrix_control(self.action_matrix, execute = False)
                     self.get_logger().info(f'solution found: {solution_found}; solution valid: {solution_valid}.')
-                    if solution_valid:
+                    self.is_solved = solution_valid
+                    
+                    # Execute solution or block
+                    if self.is_solved and self.allow_execute_trigger:
                         self.valid_times += 1
                         if self.valid_times > 3:
                             self.valid_times = 0
+                            self.allow_execute_trigger = False
                             self.machine_state = 'TWIST_WAIST'
             elif self.machine_state == 'TWIST_WAIST':
                 self.get_logger().info('twisting waist ...')
@@ -323,7 +361,8 @@ class ArmController(Node):
                     self.machine_state = 'HOLD'
             elif self.machine_state == 'HOLD':
                 self.get_logger().info('holding ...')
-                
+            elif self.machine_state == 'RELEASE':
+                pass
             else:
                 self.get_logger().info('unvalid machine state.')
 
