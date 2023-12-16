@@ -27,8 +27,8 @@ class BaseController(Node):
         self.initialpose_pub = self.create_publisher(PoseWithCovarianceStamped, '/initialpose', 10)
         self.amcl_pose_sub = self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10)
         
-        self.motion_timer = self.create_timer(0.2, self.motion_timer_callback)
-        self.fsm_timer = self.create_timer(0.2, self.fsm_timer_callback)
+        self.motion_timer = self.create_timer(0.02, self.motion_timer_callback)
+        self.fsm_timer = self.create_timer(0.02, self.fsm_timer_callback)
         
         self.state = 'INIT'
         self.is_goal_finished = False
@@ -43,12 +43,15 @@ class BaseController(Node):
         self.pose_expired_time = 1000 # TODO
         
         self.linear_kp = 0.1
-        self.linear_kd = 0.01
-        self.angular_kp = 0.35
-        self.angular_kd = 0.01
+        self.linear_kd = 0.03
+        self.angular_kp = 0.3
+        self.angular_kd = 0.03
+        self.last_vel = Twist()
         
         self.thred_theta = 2 / 180 * math.pi
         self.thred_linear = 0.05
+        
+        time.sleep(2.0)
         
         # publish initial pose
         initial_pose = PoseWithCovarianceStamped()
@@ -61,11 +64,18 @@ class BaseController(Node):
         self.initialpose_pub.publish(initial_pose)
         
         # use initial pose as the first current_pose
-        self.amcl_pose_callback(initial_pose)
+        # self.amcl_pose_callback(initial_pose)
+    
+    def amcl_pose_callback(self, msg):
+        self.get_logger().info(f'{str(msg)}')
+        self.current_pose = msg.pose.pose
+        self.pose = self.pose_to_xytheta(msg.pose.pose)
+        self.pose_stamp = msg.header.stamp
     
     def pub_cmd_vel(self, twist):
         self.get_logger().info(f'{str(twist)}')
         self.cmd_vel_pub.publish(twist)
+        self.last_vel = twist
     
     def quaternion_to_yaw(self, quaternion):
         q_0, q_1, q_2, q_3 = quaternion.w, quaternion.x, quaternion.y, quaternion.z
@@ -82,11 +92,6 @@ class BaseController(Node):
         self.goal = self.pose_to_xytheta(pose)
         self.is_goal_finished = False
         self.goal_stage = 0
-    
-    def amcl_pose_callback(self, msg):
-        self.current_pose = msg.pose.pose
-        self.pose = self.pose_to_xytheta(msg.pose.pose)
-        self.pose_stamp = msg.header.stamp
     
     def get_dtheta(self, theta, target_theta):
         if target_theta > theta:
@@ -112,9 +117,9 @@ class BaseController(Node):
         
         cmd = Twist()
         if abs(dtheta) > self.thred_theta:
-            cmd.angular.z = self.angular_kp * dtheta
+            cmd.angular.z = self.angular_kp * dtheta - self.angular_kd * self.last_vel.angular.z
         if allow_move and d > self.thred_linear:
-            cmd.linear.x = self.linear_kp * d
+            cmd.linear.x = self.linear_kp * d - self.linear_kd * self.last_vel.linear.x
         self.pub_cmd_vel(cmd)
         
         return abs(dtheta) <= self.thred_theta and (not allow_move or d <= self.thred_linear)
@@ -124,7 +129,7 @@ class BaseController(Node):
         
         cmd = Twist()
         if abs(dtheta) > self.thred_theta:
-            cmd.angular.z = self.angular_kp * dtheta
+            cmd.angular.z = self.angular_kp * dtheta - self.angular_kd * self.last_vel.angular.z
         self.pub_cmd_vel(cmd)
         
         return abs(dtheta) <= self.thred_theta
@@ -150,8 +155,7 @@ class BaseController(Node):
         if self.state == 'INIT':
             Af = Pose()
             Af.position.x = 0.3066274822848437
-            Af.position.y = -3.1658465986026695
-            # Af.position.y = -3.2658465986026695
+            Af.position.y = -3.2658465986026695
             Af.orientation.z = -0.6686671777907486
             Af.orientation.w = 0.7435618369344646
             self.set_goal(Af)
