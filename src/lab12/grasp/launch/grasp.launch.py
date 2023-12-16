@@ -33,6 +33,6 @@ def generate_launch_description():
     return LaunchDescription([
         aruco_node,
         grasp_node,
-        motion_node
+        # motion_node
     ])
 

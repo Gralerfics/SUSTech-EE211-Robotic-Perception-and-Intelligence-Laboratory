@@ -153,21 +153,20 @@ class ArucoNode(rclpy.node.Node):
         self.info_msg = info_msg
         
         # self.intrinsic_mat = np.reshape(np.array(self.info_msg.k), (3, 3))
-        # self.get_logger().info(f"Camera intrinsic matrix: {self.intrinsic_mat}")
-        # correction_factor = 0.1
-        # self.intrinsic_mat[0, 0] *= 1 + correction_factor
-        # self.intrinsic_mat[1, 1] *= 1 + correction_factor
-        # self.intrinsic_mat[0, 2] *= 1 + correction_factor / 2
-        # self.intrinsic_mat[1, 2] *= 1 + correction_factor / 2
-        # self.get_logger().info(f"Camera intrinsic matrix: {self.intrinsic_mat}")
+        # self.intrinsic_mat = np.array([
+        #     [954.997986, 0.000000, 645.128211],
+        #     [0.000000, 958.522095, 382.981208],
+        #     [0.000000, 0.000000, 1.000000]
+        # ])
         self.intrinsic_mat = np.array([
-            [954.997986, 0.000000, 645.128211],
-            [0.000000, 958.522095, 382.981208],
+            [913.323418, 0.000000, 628.185869],
+            [0.000000, 905.890072, 377.754608],
             [0.000000, 0.000000, 1.000000]
         ])
         
         # self.distortion = np.array(self.info_msg.d)
-        self.distortion = np.array([0.092492, -0.174237, 0.004543, -0.000519, 0.000000])
+        # self.distortion = np.array([0.092492, -0.174237, 0.004543, -0.000519, 0.000000])
+        self.distortion = np.array([0.079627, -0.124054, 0.002318, -0.006121, 0.000000])
         
         # Assume that camera parameters will remain the same...
         self.destroy_subscription(self.info_sub)

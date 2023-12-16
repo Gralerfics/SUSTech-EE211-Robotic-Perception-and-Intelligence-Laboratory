@@ -187,9 +187,9 @@ class ArmController(Node):
                 # target joints
                 joint_list = [theta_list[0], theta_list[1] + self.shoulder_offset, theta_list[2], theta_list[3]]
                                                     # TODO BEGIN: 直接写死
-                if joint_list[0] > 0:
-                    joint_list[0] *= 1.09
-                joint_list[0] -= 0.015
+                # if joint_list[0] > 0:
+                #     joint_list[0] *= 1.09
+                joint_list[0] += 0.07 # 0.015
                                                     # TODO END
                 
                 # substitute custom joints

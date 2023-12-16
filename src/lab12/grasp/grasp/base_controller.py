@@ -23,51 +23,34 @@ class BaseController(Node):
     def __init__(self):
         super().__init__('BaseController')
         
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 1024)
         self.initialpose_pub = self.create_publisher(PoseWithCovarianceStamped, '/initialpose', 10)
         self.amcl_pose_sub = self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10)
         
-        self.motion_timer = self.create_timer(0.02, self.motion_timer_callback)
-        self.fsm_timer = self.create_timer(0.02, self.fsm_timer_callback)
-        
-        self.state = 'INIT'
-        self.is_goal_finished = False
-        self.goal_stage = 0
-        
         self.current_pose: Pose = None
-        self.current_goal: Pose = None
         self.pose: PlanarPose = None
+        
+        self.current_goal: Pose = None
         self.goal: PlanarPose = None
+        self.goal_stage = "FACETO" # FACETO, GO, TURNTO, FINISH
         
         self.pose_stamp = None
         self.pose_expired_time = 1000 # TODO
         
-        self.linear_kp = 0.1
-        self.linear_kd = 0.03
-        self.angular_kp = 0.3
+        self.linear_kp = 0.2
+        self.linear_kd = 0.08
+        self.angular_kp = 0.35
         self.angular_kd = 0.03
         self.last_vel = Twist()
         
         self.thred_theta = 2 / 180 * math.pi
         self.thred_linear = 0.05
         
-        time.sleep(2.0)
-        
-        # publish initial pose
-        initial_pose = PoseWithCovarianceStamped()
-        initial_pose.header.frame_id = 'map'
-        initial_pose.header.stamp = self.get_clock().now().to_msg()
-        initial_pose.pose.pose.position.x = 0.3025282477783394
-        initial_pose.pose.pose.position.y = -0.36741189949949404
-        initial_pose.pose.pose.orientation.z = -0.7140501663813629
-        initial_pose.pose.pose.orientation.w = 0.7000945363954414
-        self.initialpose_pub.publish(initial_pose)
-        
         # use initial pose as the first current_pose
         # self.amcl_pose_callback(initial_pose)
     
     def amcl_pose_callback(self, msg):
-        self.get_logger().info(f'{str(msg)}')
+        # self.get_logger().info(f'{str(msg)}')
         self.current_pose = msg.pose.pose
         self.pose = self.pose_to_xytheta(msg.pose.pose)
         self.pose_stamp = msg.header.stamp
@@ -90,8 +73,10 @@ class BaseController(Node):
     def set_goal(self, pose):
         self.current_goal = pose
         self.goal = self.pose_to_xytheta(pose)
-        self.is_goal_finished = False
-        self.goal_stage = 0
+        self.goal_stage = "FACETO"
+    
+    def is_goal_reached(self):
+        return self.goal_stage == "FINISH"
     
     def get_dtheta(self, theta, target_theta):
         if target_theta > theta:
@@ -105,7 +90,7 @@ class BaseController(Node):
         dtheta_cw = target_theta_min - theta # -
         return dtheta_ccw if dtheta_ccw < -dtheta_cw else dtheta_cw
 
-    def move_control(self, x, y, allow_move = True):
+    def move_control(self, x, y, allow_move = True, theta_check = True):
         sec, _ = self.get_clock().now().seconds_nanoseconds()
         if self.pose_stamp is None or self.pose_stamp.sec - sec > self.pose_expired_time:
             return
@@ -122,7 +107,7 @@ class BaseController(Node):
             cmd.linear.x = self.linear_kp * d - self.linear_kd * self.last_vel.linear.x
         self.pub_cmd_vel(cmd)
         
-        return abs(dtheta) <= self.thred_theta and (not allow_move or d <= self.thred_linear)
+        return (not theta_check or abs(dtheta) <= self.thred_theta) and (not allow_move or d <= self.thred_linear)
     
     def angle_control(self, theta):
         dtheta = self.get_dtheta(self.pose.theta, theta)
@@ -133,38 +118,21 @@ class BaseController(Node):
         self.pub_cmd_vel(cmd)
         
         return abs(dtheta) <= self.thred_theta
-    
-    def motion_timer_callback(self):
+
+    def velocity_controller(self):
         if self.current_pose is None:
+            self.get_logger().info('waiting for amcl_pose ...')
             return
         if self.current_goal is not None:
             self.get_logger().info(f'Stage {self.goal_stage}: {self.pose}, {self.goal}')
             
-            if self.goal_stage == 0:
-                if self.move_control(self.goal.x, self.goal.y, allow_move = False):
-                    self.goal_stage = 1
-            elif self.goal_stage == 1:
-                if self.move_control(self.goal.x, self.goal.y):
-                    self.goal_stage = 2
-            elif self.goal_stage == 2:
+            if self.goal_stage == "FACETO":
+                if self.move_control(self.goal.x, self.goal.y, allow_move = False, theta_check = True):
+                    self.goal_stage = "GO"
+            elif self.goal_stage == "GO":
+                if self.move_control(self.goal.x, self.goal.y, allow_move = True, theta_check = False):
+                    self.goal_stage = "TURNTO"
+            elif self.goal_stage == "TURNTO":
                 if self.angle_control(self.goal.theta):
-                    self.goal_stage = 3
-                    self.is_goal_finished = True
-
-    def fsm_timer_callback(self):
-        if self.state == 'INIT':
-            Af = Pose()
-            Af.position.x = 0.3066274822848437
-            Af.position.y = -3.2658465986026695
-            Af.orientation.z = -0.6686671777907486
-            Af.orientation.w = 0.7435618369344646
-            self.set_goal(Af)
-            self.state = 'StoA'
-        elif self.state == 'StoA':
-            self.get_logger().info('Go to A from S ...')
-            if self.is_goal_finished:
-                self.get_logger().info('Done.')
-                # grasp
-        else:
-            self.get_logger().info('Invalid state.')
+                    self.goal_stage = "FINISH"
 
