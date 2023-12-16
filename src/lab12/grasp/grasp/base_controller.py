@@ -118,7 +118,7 @@ class BaseController(Node):
         self.pub_cmd_vel(cmd)
         
         return abs(dtheta) <= self.thred_theta
-
+    
     def velocity_controller(self):
         if self.current_pose is None:
             self.get_logger().info('waiting for amcl_pose ...')

@@ -189,7 +189,7 @@ class ArmController(Node):
                                                     # TODO BEGIN: 直接写死
                 # if joint_list[0] > 0:
                 #     joint_list[0] *= 1.09
-                joint_list[0] += 0.07 # 0.015
+                joint_list[0] += 0.075 # 0.015
                                                     # TODO END
                 
                 # substitute custom joints
@@ -340,7 +340,7 @@ class ArmController(Node):
                 _, solution_found, solution_valid, reached = self.matrix_control(
                     self.action_matrix,
                     custom_joints = [None, self.shoulder_offset, -1.4, 0.0],
-                    delay = 1.0
+                    delay = 0.5
                 )
                 if reached:
                     self.get_logger().info('Done.')
@@ -361,9 +361,8 @@ class ArmController(Node):
                 self.get_logger().info('Holding ...')
                 if self.go_home():
                     self.get_logger().info('done.')
-                    # TODO
             elif self.machine_state == 'RELEASE':
-                pass
+                self.machine_state = 'INIT' # TODO
             else:
                 self.get_logger().info('Unvalid machine state.')
 
