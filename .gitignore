@@ -1,3 +1,7 @@
 build/
 install/
 log/
+src/lab06/
+src/lab08/
+src/testpkg/
+src/testpkgcpp/
