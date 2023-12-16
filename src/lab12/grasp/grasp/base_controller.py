@@ -40,15 +40,15 @@ class BaseController(Node):
         self.goal: PlanarPose = None
         
         self.pose_stamp = None
-        self.pose_expired_time = 1
+        self.pose_expired_time = 1000 # TODO
         
-        self.linear_kp = 0.06
+        self.linear_kp = 0.1
         self.linear_kd = 0.01
-        self.angular_kp = 0.08
+        self.angular_kp = 0.35
         self.angular_kd = 0.01
         
         self.thred_theta = 2 / 180 * math.pi
-        self.thred_theta = 0.05
+        self.thred_linear = 0.05
         
         # publish initial pose
         initial_pose = PoseWithCovarianceStamped()
@@ -61,8 +61,11 @@ class BaseController(Node):
         self.initialpose_pub.publish(initial_pose)
         
         # use initial pose as the first current_pose
-        # self.current_pose = initial_pose.pose.pose
-        # self.pose = self.pose_to_xytheta(self.current_pose)
+        self.amcl_pose_callback(initial_pose)
+    
+    def pub_cmd_vel(self, twist):
+        self.get_logger().info(f'{str(twist)}')
+        self.cmd_vel_pub.publish(twist)
     
     def quaternion_to_yaw(self, quaternion):
         q_0, q_1, q_2, q_3 = quaternion.w, quaternion.x, quaternion.y, quaternion.z
@@ -81,12 +84,10 @@ class BaseController(Node):
         self.goal_stage = 0
     
     def amcl_pose_callback(self, msg):
-        self.get_logger().error('hahaha')
-        
         self.current_pose = msg.pose.pose
-        self.pose = self.pose_to_xytheta(msg.pose)
+        self.pose = self.pose_to_xytheta(msg.pose.pose)
         self.pose_stamp = msg.header.stamp
-
+    
     def get_dtheta(self, theta, target_theta):
         if target_theta > theta:
             target_theta_max = target_theta
@@ -112,11 +113,11 @@ class BaseController(Node):
         cmd = Twist()
         if abs(dtheta) > self.thred_theta:
             cmd.angular.z = self.angular_kp * dtheta
-        if allow_move and d > self.thred_theta:
+        if allow_move and d > self.thred_linear:
             cmd.linear.x = self.linear_kp * d
-        self.cmd_vel_pub.publish(cmd)
+        self.pub_cmd_vel(cmd)
         
-        return abs(dtheta) <= self.thred_theta and (not allow_move or d <= self.thred_theta)
+        return abs(dtheta) <= self.thred_theta and (not allow_move or d <= self.thred_linear)
     
     def angle_control(self, theta):
         dtheta = self.get_dtheta(self.pose.theta, theta)
@@ -124,7 +125,7 @@ class BaseController(Node):
         cmd = Twist()
         if abs(dtheta) > self.thred_theta:
             cmd.angular.z = self.angular_kp * dtheta
-        self.cmd_vel_pub.publish(cmd)
+        self.pub_cmd_vel(cmd)
         
         return abs(dtheta) <= self.thred_theta
     
@@ -132,7 +133,7 @@ class BaseController(Node):
         if self.current_pose is None:
             return
         if self.current_goal is not None:
-            self.get_logger().info(f'{self.pose}, {self.goal}')
+            self.get_logger().info(f'Stage {self.goal_stage}: {self.pose}, {self.goal}')
             
             if self.goal_stage == 0:
                 if self.move_control(self.goal.x, self.goal.y, allow_move = False):
@@ -149,16 +150,17 @@ class BaseController(Node):
         if self.state == 'INIT':
             Af = Pose()
             Af.position.x = 0.3066274822848437
-            Af.position.y = -3.2658465986026695
+            Af.position.y = -3.1658465986026695
+            # Af.position.y = -3.2658465986026695
             Af.orientation.z = -0.6686671777907486
             Af.orientation.w = 0.7435618369344646
             self.set_goal(Af)
             self.state = 'StoA'
         elif self.state == 'StoA':
-            self.get_logger().info('go A from S ...')
+            self.get_logger().info('Go to A from S ...')
             if self.is_goal_finished:
-                self.get_logger().info('done.')
+                self.get_logger().info('Done.')
                 # grasp
         else:
-            self.get_logger().info('invalid state.')
+            self.get_logger().info('Invalid state.')
 

@@ -23,7 +23,7 @@ class ArmController(Node):
         # [ arm controller ]
         super().__init__('ArmController')
         self.tf_reader = tf_reader
-        
+
         self.cmd_pub = self.create_publisher(JointSingleCommand, '/px100/commands/joint_single', 10)
         self.group_pub = self.create_publisher(JointGroupCommand, '/px100/commands/joint_group', 10)
         self.pantil_pub = self.create_publisher(PanTiltCmdDeg, '/pan_tilt_cmd_deg', 10)
@@ -126,17 +126,17 @@ class ArmController(Node):
                 if dis < self.thred:
                     return True
                 else:
-                    self.get_logger().info('single joint moving...')
+                    self.get_logger().info('Single joint moving...')
                     return False
             elif name == 'gripper':
                 return True
             else:
-                self.get_logger().info('unexpect name!')
+                self.get_logger().info('Unexpect name!')
                 return False
 
     def set_group_pos(self, pos_list):
         if len(pos_list) != self.num_joints:
-            self.get_logger().info('unexpect length of list!')
+            self.get_logger().info('Unexpect length of list!')
             return False
         
         for i in range(self.num_joints):
@@ -154,7 +154,7 @@ class ArmController(Node):
             check_pos = self.joint_pos
             return np.abs(pos_list[0] - check_pos[0]) < thred and np.abs(pos_list[1] - check_pos[1]) < thred and np.abs(pos_list[2] - check_pos[2]) < thred and np.abs(pos_list[3] - check_pos[3]) < thred
         else:
-            self.get_logger().info('no joint states.')
+            self.get_logger().info('No joint states.')
             return False
     
     def kinematics(self, joint_state):
@@ -262,10 +262,10 @@ class ArmController(Node):
         
         if len(self.joint_pos) == 7:
             if self.machine_state == 'INIT':
-                self.get_logger().info('initializing pan tilt and arm ...')
+                self.get_logger().info('Initializing pan tilt and arm ...')
                 self.pan_tilt(pitch = 15.0, yaw = 0.0, speed = 10)
                 if self.go_home() and self.gripper(1.5, 0.5):
-                    self.get_logger().info('done.')
+                    self.get_logger().info('Ready.')
                     self.machine_state = 'DETECT'
                     
                     self.valid_times = 0
@@ -276,7 +276,7 @@ class ArmController(Node):
             elif self.machine_state == 'DETECT':
                 current_aruco_pose = self.get_active_aruco_pose()
                 if current_aruco_pose:
-                    self.get_logger().info('aruco detected.')
+                    self.get_logger().info('Aruco detected.')
                     
                     # Compute T_0a
                     T_0c = compute_T_0c()
@@ -324,7 +324,7 @@ class ArmController(Node):
                     
                     # Test solution
                     _, solution_found, solution_valid, reached = self.matrix_control(self.action_matrix, execute = False)
-                    self.get_logger().info(f'solution found: {solution_found}; solution valid: {solution_valid}.')
+                    self.get_logger().info(f'Solution found: {solution_found}; solution valid: {solution_valid}.')
                     self.is_solved = solution_valid
                     
                     # Execute solution or block
@@ -335,7 +335,7 @@ class ArmController(Node):
                             self.allow_execute_trigger = False
                             self.machine_state = 'TWIST_WAIST'
             elif self.machine_state == 'TWIST_WAIST':
-                self.get_logger().info('twisting waist ...')
+                self.get_logger().info('Twisting waist ...')
                 self.gripper(1.5, 1.0)
                 _, solution_found, solution_valid, reached = self.matrix_control(
                     self.action_matrix,
@@ -343,27 +343,27 @@ class ArmController(Node):
                     delay = 1.0
                 )
                 if reached:
-                    self.get_logger().info('done.')
+                    self.get_logger().info('Done.')
                     self.machine_state = 'GRASP'
             elif self.machine_state == 'GRASP':
-                self.get_logger().info('grasping ...')
+                self.get_logger().info('Grasping ...')
                 _, solution_found, solution_valid, reached = self.matrix_control(self.action_matrix, delay = 1.0)
                 if reached:
                     self.get_logger().info('done.')
                     self.gripper(0.7, 1.0)
                     self.machine_state = 'HAND_UP'
             elif self.machine_state == 'HAND_UP':
-                self.get_logger().info('handing up ...')
+                self.get_logger().info('Handing up ...')
                 if self.go_handup():
                     self.get_logger().info('done.')
                     self.machine_state = 'HOLD'
             elif self.machine_state == 'HOLD':
-                self.get_logger().info('holding ...')
+                self.get_logger().info('Holding ...')
                 if self.go_home():
                     self.get_logger().info('done.')
                     # TODO
             elif self.machine_state == 'RELEASE':
                 pass
             else:
-                self.get_logger().info('unvalid machine state.')
+                self.get_logger().info('Unvalid machine state.')
 
