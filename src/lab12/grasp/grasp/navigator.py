@@ -103,8 +103,8 @@ def main():
     rclpy.spin_until_future_complete(navigator, future)
     response = future.result()
     
-    b_goal.pose.orientation.z = -1.0
-    b_goal.pose.orientation.w = 0.0
+    b_goal.pose.orientation.z = 0.9985
+    b_goal.pose.orientation.w = 0.0547
     go_goal_blocking(navigator, b_goal)
     
     a_goal.pose.orientation.z = -0.7435618369344646
@@ -114,8 +114,8 @@ def main():
     s_goal = PoseStamped()
     s_goal.header.frame_id = 'map'
     s_goal.header.stamp = navigator.get_clock().now().to_msg()
-    s_goal.pose.position.x = 0.3025282477783394
-    s_goal.pose.position.y = -0.40741189949949404
+    s_goal.pose.position.x = 0.3725282477783394
+    s_goal.pose.position.y = -0.45741189949949404
     s_goal.pose.orientation.z = -0.7000945363954414
     s_goal.pose.orientation.w = -0.7140501663813629
     go_goal_blocking(navigator, s_goal)
@@ -127,3 +127,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
