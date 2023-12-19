@@ -25,11 +25,6 @@ def generate_launch_description():
         executable='grasp'
     )
     
-    motion_node = Node(
-        package='grasp',
-        executable='motion'
-    )
-    
     navigator_node = Node(
         package='grasp',
         executable='navigator'
