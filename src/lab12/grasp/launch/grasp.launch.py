@@ -30,10 +30,15 @@ def generate_launch_description():
         executable='navigator'
     )
     
+    navigator_casual_node = Node(
+        package='grasp',
+        executable='navigator_casual'
+    )
+    
     return LaunchDescription([
         aruco_node,
         grasp_node,
-        # motion_node,
-        navigator_node
+        navigator_node,
+        # navigator_casual_node
     ])
 

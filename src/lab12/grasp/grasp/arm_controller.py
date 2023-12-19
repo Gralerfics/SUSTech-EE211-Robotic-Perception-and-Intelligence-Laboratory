@@ -80,7 +80,8 @@ class ArmController(Node):
         return response
 
     def grasp_is_solved_callback(self, request, response):
-        response.result = self.is_solved
+        response.result = self.is_solved if self.is_solved is not None else False
+        self.is_solved = None
         self.get_logger().info(f'grasp_is_solved() called -> {response.result}')
         return response
 
@@ -283,23 +284,26 @@ class ArmController(Node):
                     T_ca = compute_T_ca()
                     T_0a = np.dot(T_0c, T_ca)
                     
-                    # Correct T_0a translation
-                    dx, dy = T_0a[0, 3], T_0a[1, 3]
-                    d = math.sqrt(dx * dx + dy * dy)
-                    T_0a[0, 3] -= dx * 0.02 / d
-                    T_0a[1, 3] -= dy * 0.02 / d
-                    T_0a[2, 3] += 0.005
+                    # Prepare to process T_0a
+                    self.action_matrix = T_0a
                     
-                    # Compute valid T_0a orientation
-                    dx, dy = T_0a[0, 3], T_0a[1, 3]
+                    # Correct action_matrix translation
+                    dx, dy = self.action_matrix[0, 3], self.action_matrix[1, 3]
+                    d = math.sqrt(dx * dx + dy * dy)
+                    self.action_matrix[0, 3] -= dx * 0.02 / d
+                    self.action_matrix[1, 3] -= dy * 0.02 / d
+                    self.action_matrix[2, 3] += 0.005
+                    
+                    # Compute valid action_matrix orientation
+                    dx, dy = self.action_matrix[0, 3], self.action_matrix[1, 3]
                     d = math.sqrt(dx * dx + dy * dy)
                     nx, ny = dx / d, dy / d
-                    T_0a[:3, :3] = np.array([
+                    self.action_matrix[:3, :3] = np.array([
                         [nx, -ny, 0],
                         [ny,  nx, 0],
                         [ 0,   0, 1]
                     ])
-                    self.action_matrix = T_0a # TODO: 每次刚 bringup 后的第一次运行会出现 T_0a 高出正确位置一截的情况（猜测是 T_0c 的问题，没具体检查）
+                     # TODO: 每次刚 bringup 后的第一次运行会出现 action_matrix 高出正确位置一截的情况（猜测是 T_0c 的问题，没具体检查）
                     
                     # Publish selected aruco pose
                     aruco_target_pose = PoseStamped()
@@ -311,8 +315,8 @@ class ArmController(Node):
                     # Publish block center pose
                     block_center_pose = PoseStamped()
                     block_center_pose.header.stamp = self.get_clock().now().to_msg()
-                    block_center_pose.header.frame_id = 'camera_color_optical_frame'
-                    block_center_pose.pose = self.matrix_to_pose(T_ca)
+                    block_center_pose.header.frame_id = 'px100/base_link'
+                    block_center_pose.pose = self.matrix_to_pose(T_0a)
                     self.block_center_pose_pub.publish(block_center_pose)
                     
                     # Publish arm target pose
