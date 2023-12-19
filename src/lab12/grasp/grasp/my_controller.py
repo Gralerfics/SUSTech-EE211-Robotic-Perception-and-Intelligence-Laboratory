@@ -114,7 +114,7 @@ class LocalController(Node):
             time += self.dt
         return Trajectory
         
-    def DWAcontroller(self, x, ):
+    def DWAcontroller(self, x, u, goal, obstacles):
         vw_limit = self.vw_range()
         
         
