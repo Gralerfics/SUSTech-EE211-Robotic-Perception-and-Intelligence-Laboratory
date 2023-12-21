@@ -4,8 +4,10 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.duration import Duration
+
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
-from geometry_msgs.msg import PoseStamped
+
+from geometry_msgs.msg import PoseStamped, Twist
 
 from grasp_interfaces.srv import GraspAction, GraspQuery
 
@@ -51,9 +53,12 @@ def main():
     grasp_query_solved_client.wait_for_service()
     grasp_query_holding_client.wait_for_service()
     
+    # publisher
+    cmd_vel_pub = navigator.create_publisher(Twist, '/cmd_vel', 10)
+    
     # block pose subscriber
     block_center_pose = None
-    block_center_pose_expire_time = 1.0
+    block_center_pose_expire_time = 2.0
     
     def block_center_pose_callback(msg):
         nonlocal block_center_pose
@@ -85,17 +90,24 @@ def main():
     go_goal(navigator, a_goal, blocking = False)
     
     # Check aruco insight
-    take_over = False
+    insight = False
     while not navigator.isTaskComplete():
         block_pose = get_block_insight_pose()
         if block_pose is not None:
-            take_over = True
-            navigator.cancelTask()
+            insight = True
             break
     
     # Approach to block
-    if take_over:
-        pass
+    if insight:
+        block_pose = get_block_insight_pose()
+        
+        navigator.cancelTask()
+        # while not navigator.isTaskComplete(): # TODO: temporarily substitute cancelTask()
+        #     feedback = navigator.getFeedback()
+        
+        
+    else:
+        pass # TODO: look around
     
     # Grasp
     request = GraspAction.Request()

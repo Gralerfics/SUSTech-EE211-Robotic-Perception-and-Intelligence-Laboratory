@@ -1,0 +1,5 @@
+<library path="nav2_my_planner_plugin">
+	<class name="nav2_my_planner/AStar" type="nav2_my_planner::AStar" base_class_type="nav2_core::GlobalPlanner">
+	  <description>Haha.</description>
+	</class>
+</library>

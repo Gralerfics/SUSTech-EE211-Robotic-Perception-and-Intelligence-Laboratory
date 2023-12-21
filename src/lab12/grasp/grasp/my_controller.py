@@ -39,7 +39,6 @@ class LocalController(Node):
         self.alpha_goal_coef = 1
         self.beta_velocity_coef = 1
         self.gamma_obstacle_coef = 1
-        
         self.best_Trajectory = []
 
     def costmap_callback(self, msg):
@@ -66,16 +65,24 @@ class LocalController(Node):
         for y in range(self.localmap_height):
             for x in range(self.localmap_width):
                 index = x + y * self.localmap_width
-                if self.costmap[index] != 0:  # Occupied cell
+                if self.costmap[index] != 0:    # Occupied cell
                     # Convert map index to world coordinates
                     world_x = self.localmap_origin_x + (x + 0.5) * self.localmap_resolution
                     world_y = self.localmap_origin_y + (y + 0.5) * self.localmap_resolution
                     self.obstacle_list.append([world_x, world_y])
         
     # Get the goal pose
-    def get_goal(self, goal):
-        self.goal_pos = [goal.pose.position.x, goal.pose.position.y, 
-                         euler_from_quaternion(0, 0, goal.pose.orientation.z, goal.pose.orientation.w)]
+    def get_path(self, path):
+        self.path = path.poses.pose
+        self.goal_count = 0
+        self.goal_numbers = len(self.path)
+        
+    def get_goal(self):
+        if self.goal_count < self.goal_numbers:
+            goal = self.path[self.goal_count]
+            self.goal_pos = [goal.pose.position.x, goal.pose.position.y, 
+                            euler_from_quaternion(0, 0, goal.pose.orientation.z, goal.pose.orientation.w)]
+            self.goal_count += 1
         
     # Cost funtions
     def Goal_Cost(self, poses):
@@ -125,12 +132,15 @@ class LocalController(Node):
         return Trajectory
         
     # DWA Controller
-    def DWAcontroller(self, x, u):
+    def DWAcontroller(self):
+        x = [self.x, self.y, self.angle, self.v, self.w]
         vw_limit = self.vw_range()
+        best_u = np.array([self.v, self.w])
         best_Trajectory = np.array(x)
         min_score = 10000.0
         for v in np.arange(vw_limit[0], vw_limit[1], self.v_resolution):   # 线速度
             for w in np.arange(vw_limit[2], vw_limit[3], self.w_resolution):  # 角速度
+                u = np.array([v, w])
                 Trajectory = self.Trajectory_Calculate(x, u)
                 goal_score = self.Goal_Cost(self.goal_pos, Trajectory)
                 vel_score = self.Velocity_Cost(u)
@@ -138,23 +148,29 @@ class LocalController(Node):
                 score = self.alpha_goal_coef * goal_score + self.beta_velocity_coef * vel_score + self.gamma_obstacle_coef * obs_score
                 if score <= min_score:
                     min_score = score
-                    u = np.array([v, w])
+                    best_u = np.array([v, w])
                     best_Trajectory = Trajectory
-        self.best_u = u
+        self.best_u = best_u
         self.best_Trajectory = best_Trajectory
         # return u, best_Trajectory
 
     # Excute the chosen [v, w]
-    def reach_goal(self):
-        if len(self.best_Trajectory) != 0:
-            while (self.x - self.goal_pos[0] >= 0.05 | self.y - self.goal_pos[1] >= 0.05):
-                self.twist.linear.x = self.best_u[0] * np.cos(self.angle)
-                self.twist.linear.y = self.best_u[0] * np.sin(self.angle)
-                self.twist.angular.z = self.best_u[1]
-                self.cmd_vel_pub.publish(self.twist)
+    def goToGoal(self, path):
+        if not path:
+            self.get_path(path)
+            for i in range(self.goal_numbers):
+                self.get_goal()
+                self.DWAcontroller()
+                if len(self.best_Trajectory) != 0:
+                    print(f"Heading to the {i} / {self.goal_numbers} goal! ")
+                    while (self.x - self.goal_pos[0] >= 0.05 | self.y - self.goal_pos[1] >= 0.05):
+                        self.twist.linear.x = self.best_u[0] * np.cos(self.angle)
+                        self.twist.linear.y = self.best_u[0] * np.sin(self.angle)
+                        self.twist.angular.z = self.best_u[1]
+                        self.cmd_vel_pub.publish(self.twist)
             return True
-        return False
-        
+        else:
+            return False
         
 # if __name__ == '__main__':
 #     try:

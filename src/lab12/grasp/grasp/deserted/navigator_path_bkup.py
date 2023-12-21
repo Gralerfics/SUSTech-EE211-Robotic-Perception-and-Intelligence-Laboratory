@@ -44,7 +44,7 @@ def main():
     while map_receiver.map is None:
         map_receiver.get_logger().info('waiting for /map ...')
         # navigator.changeMap('/home/tony/MyFiles_ClickHere/Workspace/gralerfics/data/map.yaml')
-        rclpy.spin_once(map_receiver)
+        rclpy.spin_once(map_receiver, timeout_sec = 0.1)
 
     # Activate navigation, if not autostarted. This should be called after setInitialPose()
     # or this will initialize at the origin of the map and update the costmap with bogus readings.
@@ -80,9 +80,9 @@ def main():
     # sanity check a valid path exists
     # path = navigator.getPath(initial_pose, goal_pose)
 
-    # navigator.goToPose(goal_pose)
-    
     planner = AStarPlanner(map_receiver.map, 0.2)
+    
+    navigator.get_logger().info('planning ...')
     
     initial_x, initial_y = initial_pose.pose.position.x, initial_pose.pose.position.y
     goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y
@@ -93,18 +93,14 @@ def main():
     n = len(rx)
     for i in range(20, n):
         pose = PoseStamped()
-        pose.header = path.header
         pose.pose.position.x, pose.pose.position.y = rx[i], ry[i]
         if i == n - 1:
             pose.pose.orientation = goal_pose.pose.orientation
-        else:
-            pass
-            # pose.pose.orientation = Qua...
         path.poses.append(pose)
     map_receiver.path_pub.publish(path)
     
-    navigator.goToPose(goal_pose)
-    # navigator.followPath(path)
+    # navigator.goToPose(goal_pose)
+    navigator.followPath(path)
 
     i = 0
     while not navigator.isTaskComplete():
@@ -117,24 +113,24 @@ def main():
         # Do something with the feedback
         i = i + 1
         feedback = navigator.getFeedback()
-        if feedback and i % 5 == 0:
-            print(
-                'Estimated time of arrival: '
-                + '{0:.0f}'.format(
-                    Duration.from_msg(feedback.estimated_time_remaining).nanoseconds
-                    / 1e9
-                )
-                + ' seconds.'
-            )
+        # if feedback and i % 5 == 0:
+        #     print(
+        #         'Estimated time of arrival: '
+        #         + '{0:.0f}'.format(
+        #             Duration.from_msg(feedback.estimated_time_remaining).nanoseconds
+        #             / 1e9
+        #         )
+        #         + ' seconds.'
+        #     )
 
-            # Some navigation timeout to demo cancellation
-            if Duration.from_msg(feedback.navigation_time) > Duration(seconds=600.0):
-                navigator.cancelTask()
+        #     Some navigation timeout to demo cancellation
+        #     if Duration.from_msg(feedback.navigation_time) > Duration(seconds=600.0):
+        #         navigator.cancelTask()
 
-            # Some navigation request change to demo preemption
-            # if Duration.from_msg(feedback.navigation_time) > Duration(seconds=18.0):
-            #     goal_pose.pose.position.x = -3.0
-            #     navigator.goToPose(goal_pose)
+        #     Some navigation request change to demo preemption
+        #     if Duration.from_msg(feedback.navigation_time) > Duration(seconds=18.0):
+        #         goal_pose.pose.position.x = -3.0
+        #         navigator.goToPose(goal_pose)
 
     # Do something depending on the return code
     result = navigator.getResult()

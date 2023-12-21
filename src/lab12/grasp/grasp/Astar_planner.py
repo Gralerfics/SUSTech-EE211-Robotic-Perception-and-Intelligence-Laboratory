@@ -1,4 +1,5 @@
 import math
+import time
 import numpy as np
 from scipy.ndimage import distance_transform_cdt
 
@@ -146,4 +147,25 @@ class AStarPlanner:
         # dx, dy, cost
         motion = [[1, 0, 1], [0, 1, 1], [-1, 0, 1], [0, -1, 1], [-1, -1, math.sqrt(2)], [-1, 1, math.sqrt(2)], [1, -1, math.sqrt(2)], [1, 1, math.sqrt(2)]]
         return motion
+    
+    
+    def find_path(self, initial_pose, goal_pose):
+        initial_x, initial_y = initial_pose.pose.position.x, initial_pose.pose.position.y
+        goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y
+        rx, ry = self.planning(initial_x, initial_y, goal_x, goal_y)
+        path: Path = Path()
+        path.header.stamp = time.now().to_msg()
+        path.header.frame_id = 'map'
+        n = len(rx)
+        for i in range(20, n):
+            pose = PoseStamped()
+            pose.header = path.header
+            pose.pose.position.x, pose.pose.position.y = rx[i], ry[i]
+            if i == n - 1:
+                pose.pose.orientation = goal_pose.pose.orientation
+            else:
+                pass
+                # pose.pose.orientation = Qua...
+            path.poses.append(pose)
+        return path
 
