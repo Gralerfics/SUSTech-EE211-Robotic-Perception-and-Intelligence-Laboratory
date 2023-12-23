@@ -4,8 +4,8 @@
   <name>nav2_my_planner</name>
   <version>1.0.0</version>
   <description>Astar planner.</description>
-  <maintainer email="shivaang14@gmail.com">Shivang Patel</maintainer>
-  <license>BSD-3-Clause</license>
+  <maintainer email="glverfer@outlook.com">Gralerfics</maintainer>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

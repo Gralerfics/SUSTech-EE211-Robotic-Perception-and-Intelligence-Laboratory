@@ -1,147 +1,346 @@
-/*********************************************************************
- *
- * Software License Agreement (BSD License)
- *
- *  Copyright (c) 2020 Shivang Patel
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *
- * Author: Shivang Patel
- *
- * Reference tutorial:
- * https://navigation.ros.org/tutorials/docs/writing_new_nav2planner_plugin.html
- *********************************************************************/
-
-#include <cmath>
-#include <string>
-#include <memory>
-#include "nav2_util/node_utils.hpp"
-
 #include "nav2_my_planner/my_planner.hpp"
 
-namespace nav2_my_planner
-{
+#include <chrono>
+#include <cmath>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "builtin_interfaces/msg/duration.hpp"
+#include "nav2_util/costmap.hpp"
+#include "nav2_util/node_utils.hpp"
+#include "nav2_costmap_2d/cost_values.hpp"
+
+#include "nav2_my_planner/astar_planner.hpp"
+
+using namespace std::chrono_literals;
+using namespace std::chrono;
+using nav2_util::declare_parameter_if_not_declared;
+using rcl_interfaces::msg::ParameterType;
+using std::placeholders::_1;
+
+namespace nav2_my_planner {
+
+AStar::AStar(): tf_(nullptr), costmap_(nullptr) {
+	RCLCPP_INFO(logger_, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+}
+
+AStar::~AStar() {
+  	RCLCPP_INFO(logger_, "Destroying plugin %s of type AStar", name_.c_str());
+}
 
 void AStar::configure(
-  const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-  std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
+	const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
+	std::string name,
+	std::shared_ptr<tf2_ros::Buffer> tf,
+	std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
-  node_ = parent.lock();
-  name_ = name;
-  tf_ = tf;
-  costmap_ = costmap_ros->getCostmap();
-  global_frame_ = costmap_ros->getGlobalFrameID();
+	tf_ = tf;
+	name_ = name;
+	costmap_ = costmap_ros->getCostmap();
+	global_frame_ = costmap_ros->getGlobalFrameID();
 
-  // Parameter initialization
-  nav2_util::declare_parameter_if_not_declared(
-    node_, name_ + ".interpolation_resolution", rclcpp::ParameterValue(
-      0.1));
-  node_->get_parameter(name_ + ".interpolation_resolution", interpolation_resolution_);
+	node_ = parent;
+	auto node = parent.lock();
+	clock_ = node->get_clock();
+	logger_ = node->get_logger();
+
+	RCLCPP_INFO(logger_, "Configuring plugin %s of type AStar", name_.c_str());
+
+	tolerance_ = 0.25;
+
+	// Create a planner based on the new costmap size
+	planner_ = std::make_unique<AStarPlanner>(costmap_->getSizeInCellsX(), costmap_->getSizeInCellsY());
 }
 
-void AStar::cleanup()
-{
-  RCLCPP_INFO(
-    node_->get_logger(), "CleaningUp plugin %s of type NavfnPlanner",
-    name_.c_str());
+void AStar::activate() {
+	RCLCPP_INFO(logger_, "Activating plugin %s of type AStar.", name_.c_str());
 }
 
-void AStar::activate()
-{
-  RCLCPP_INFO(
-    node_->get_logger(), "Activating plugin %s of type NavfnPlanner",
-    name_.c_str());
+void AStar::deactivate() {
+	RCLCPP_INFO(logger_, "Deactivating plugin %s of type AStar.", name_.c_str());
 }
 
-void AStar::deactivate()
-{
-  RCLCPP_INFO(
-    node_->get_logger(), "Deactivating plugin %s of type NavfnPlanner",
-    name_.c_str());
+void AStar::cleanup() {
+	RCLCPP_INFO(logger_, "Cleaning up plugin %s of type AStar.", name_.c_str());
+	planner_.reset();
 }
 
 nav_msgs::msg::Path AStar::createPlan(
-  const geometry_msgs::msg::PoseStamped & start,
-  const geometry_msgs::msg::PoseStamped & goal)
-{
-  nav_msgs::msg::Path global_path;
+	const geometry_msgs::msg::PoseStamped & start,
+	const geometry_msgs::msg::PoseStamped & goal
+) {	
+	unsigned int mx_start, my_start, mx_goal, my_goal;
+	if (!costmap_->worldToMap(start.pose.position.x, start.pose.position.y, mx_start, my_start)) {
+		RCLCPP_ERROR(logger_, "The start position (%f, %f) is off the map.", start.pose.position.x, start.pose.position.y);
+	}
+	if (!costmap_->worldToMap(goal.pose.position.x, goal.pose.position.y, mx_goal, my_goal)) {
+		RCLCPP_ERROR(logger_, "The goal position (%f, %f) is off the map.", goal.pose.position.x, goal.pose.position.y);
+	}
+	if (tolerance_ == 0 && costmap_->getCost(mx_goal, my_goal) == nav2_costmap_2d::LETHAL_OBSTACLE) {
+		RCLCPP_ERROR(logger_, "The goal (%f, %f) was in a lethal cost.", goal.pose.position.x, goal.pose.position.y);
+	}
 
-  // Checking if the goal and start state is in the global frame
-  if (start.header.frame_id != global_frame_) {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Planner will only except start position from %s frame",
-      global_frame_.c_str());
-    return global_path;
-  }
+	if (isPlannerOutOfDate()) planner_->setNavArr(costmap_->getSizeInCellsX(), costmap_->getSizeInCellsY());
 
-  if (goal.header.frame_id != global_frame_) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Planner will only except goal position from %s frame",
-      global_frame_.c_str());
-    return global_path;
-  }
+	nav_msgs::msg::Path path;
 
-  global_path.poses.clear();
-  global_path.header.stamp = node_->now();
-  global_path.header.frame_id = global_frame_;
-  // calculating the number of loops for current value of interpolation_resolution_
-  int total_number_of_loop = std::hypot(
-    goal.pose.position.x - start.pose.position.x,
-    goal.pose.position.y - start.pose.position.y) /
-    interpolation_resolution_;
-  double x_increment = (goal.pose.position.x - start.pose.position.x) / total_number_of_loop;
-  double y_increment = (goal.pose.position.y - start.pose.position.y) / total_number_of_loop;
+	if (start.pose.position.x == goal.pose.position.x && start.pose.position.y == goal.pose.position.y) {
+		path.header.stamp = clock_->now();
+		path.header.frame_id = global_frame_;
+		geometry_msgs::msg::PoseStamped pose;
+		pose.header = path.header;
+		pose.pose.position.z = 0.0;
+		pose.pose = start.pose;
+		if (start.pose.orientation != goal.pose.orientation && !false) {
+			pose.pose.orientation = goal.pose.orientation;
+		}
+		path.poses.push_back(pose);
+		return path;
+	}
 
-  for (int i = 0; i < total_number_of_loop; ++i) {
-    geometry_msgs::msg::PoseStamped pose;
-    pose.pose.position.x = start.pose.position.x + x_increment * i;
-    pose.pose.position.y = start.pose.position.y + y_increment * i;
-    pose.pose.position.z = 0.0;
-    pose.pose.orientation.x = 0.0;
-    pose.pose.orientation.y = 0.0;
-    pose.pose.orientation.z = 0.0;
-    pose.pose.orientation.w = 1.0;
-    pose.header.stamp = node_->now();
-    pose.header.frame_id = global_frame_;
-    global_path.poses.push_back(pose);
-  }
+	if (!makePlan(start.pose, goal.pose, tolerance_, path)) RCLCPP_ERROR(logger_, "Failed to create plan with tolerance of: %f", tolerance_);
 
-  geometry_msgs::msg::PoseStamped goal_pose = goal;
-  goal_pose.header.stamp = node_->now();
-  goal_pose.header.frame_id = global_frame_;
-  global_path.poses.push_back(goal_pose);
-
-  return global_path;
+	return path;
 }
 
-}  // namespace nav2_my_planner
+bool AStar::isPlannerOutOfDate() {
+	return (!planner_.get() || planner_->nx != static_cast<int>(costmap_->getSizeInCellsX()) || planner_->ny != static_cast<int>(costmap_->getSizeInCellsY()));
+}
+
+bool AStar::makePlan(
+	const geometry_msgs::msg::Pose & start,
+	const geometry_msgs::msg::Pose & goal, double tolerance,
+	nav_msgs::msg::Path & plan
+) {
+	plan.poses.clear();
+	plan.header.stamp = clock_->now();
+	plan.header.frame_id = global_frame_;
+
+	double wx = start.position.x;
+	double wy = start.position.y;
+
+	RCLCPP_DEBUG(
+		logger_, "Making plan from (%.2f,%.2f) to (%.2f,%.2f)",
+		start.position.x, start.position.y, goal.position.x, goal.position.y);
+
+	unsigned int mx, my;
+	worldToMap(wx, wy, mx, my);
+
+	// clear the starting cell within the costmap because we know it can't be an obstacle
+	clearRobotCell(mx, my);
+
+	std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
+
+	// make sure to resize the underlying array that Navfn uses
+	planner_->setNavArr(
+		costmap_->getSizeInCellsX(),
+		costmap_->getSizeInCellsY());
+
+	planner_->setCostmap(costmap_->getCharMap(), true, true);
+
+	lock.unlock();
+
+	int map_start[2];
+	map_start[0] = mx;
+	map_start[1] = my;
+
+	wx = goal.position.x;
+	wy = goal.position.y;
+
+	worldToMap(wx, wy, mx, my);
+	int map_goal[2];
+	map_goal[0] = mx;
+	map_goal[1] = my;
+
+	planner_->setStart(map_goal);
+	planner_->setGoal(map_start);
+	planner_->calcAStarPlanner();
+
+	double resolution = costmap_->getResolution();
+	geometry_msgs::msg::Pose p, best_pose;
+
+	bool found_legal = false;
+
+	p = goal;
+	double potential = getPointPotential(p.position);
+	if (potential < POT_HIGH) {
+		// Goal is reachable by itself
+		best_pose = p;
+		found_legal = true;
+	} else {
+		// Goal is not reachable. Trying to find nearest to the goal
+		// reachable point within its tolerance region
+		double best_sdist = std::numeric_limits<double>::max();
+
+		p.position.y = goal.position.y - tolerance;
+		while (p.position.y <= goal.position.y + tolerance) {
+			p.position.x = goal.position.x - tolerance;
+			while (p.position.x <= goal.position.x + tolerance) {
+				potential = getPointPotential(p.position);
+				double sdist = squared_distance(p, goal);
+				if (potential < POT_HIGH && sdist < best_sdist) {
+					best_sdist = sdist;
+					best_pose = p;
+					found_legal = true;
+				}
+				p.position.x += resolution;
+			}
+			p.position.y += resolution;
+		}
+	}
+
+	if (found_legal) {
+		// extract the plan
+		if (getPlanFromPotential(best_pose, plan)) {
+			smoothApproachToGoal(best_pose, plan);
+
+			// If use_final_approach_orientation=true, interpolate the last pose orientation from the
+			// previous pose to set the orientation to the 'final approach' orientation of the robot so
+			// it does not rotate.
+			// And deal with corner case of plan of length 1
+			if (false) {
+				size_t plan_size = plan.poses.size();
+				if (plan_size == 1) {
+					plan.poses.back().pose.orientation = start.orientation;
+				} else if (plan_size > 1) {
+					double dx, dy, theta;
+					auto last_pose = plan.poses.back().pose.position;
+					auto approach_pose = plan.poses[plan_size - 2].pose.position;
+					// Deal with the case of NavFn producing a path with two equal last poses
+					if (std::abs(last_pose.x - approach_pose.x) < 0.0001 && std::abs(last_pose.y - approach_pose.y) < 0.0001 && plan_size > 2) {
+						approach_pose = plan.poses[plan_size - 3].pose.position;
+					}
+					dx = last_pose.x - approach_pose.x;
+					dy = last_pose.y - approach_pose.y;
+					theta = atan2(dy, dx);
+					plan.poses.back().pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(theta);
+				}
+			}
+		} else {
+			RCLCPP_ERROR(logger_, "Failed to create a plan from potential when a legal potential was found. This shouldn't happen.");
+		}
+	}
+
+	return !plan.poses.empty();
+}
+
+void AStar::smoothApproachToGoal(
+	const geometry_msgs::msg::Pose & goal,
+	nav_msgs::msg::Path & plan
+) {
+	// Replace the last pose of the computed path if it's actually further away
+	// to the second to last pose than the goal pose.
+	if (plan.poses.size() >= 2) {
+		auto second_to_last_pose = plan.poses.end()[-2];
+		auto last_pose = plan.poses.back();
+		if (squared_distance(last_pose.pose, second_to_last_pose.pose) > squared_distance(goal, second_to_last_pose.pose)) {
+			plan.poses.back().pose = goal;
+			return;
+		}
+	}
+	geometry_msgs::msg::PoseStamped goal_copy;
+	goal_copy.pose = goal;
+	plan.poses.push_back(goal_copy);
+}
+
+bool AStar::getPlanFromPotential(
+	const geometry_msgs::msg::Pose & goal,
+	nav_msgs::msg::Path & plan
+) {
+	// clear the plan, just in case
+	plan.poses.clear();
+
+	// Goal should be in global frame
+	double wx = goal.position.x;
+	double wy = goal.position.y;
+
+	// the potential has already been computed, so we won't update our copy of the costmap
+	unsigned int mx, my;
+	worldToMap(wx, wy, mx, my);
+
+	int map_goal[2];
+	map_goal[0] = mx;
+	map_goal[1] = my;
+
+	planner_->setStart(map_goal);
+
+	const int & max_cycles = (costmap_->getSizeInCellsX() >= costmap_->getSizeInCellsY()) ? (costmap_->getSizeInCellsX() * 4) : (costmap_->getSizeInCellsY() * 4);
+
+	int path_len = planner_->calcPath(max_cycles);
+	if (path_len == 0) {
+		return false;
+	}
+
+	auto cost = planner_->getLastPathCost();
+	RCLCPP_DEBUG(logger_, "Path found, %d steps, %f cost\n", path_len, cost);
+
+	// extract the plan
+	float * x = planner_->getPathX();
+	float * y = planner_->getPathY();
+	int len = planner_->getPathLen();
+
+	for (int i = len - 1; i >= 0; --i) {
+		// convert the plan to world coordinates
+		double world_x, world_y;
+		mapToWorld(x[i], y[i], world_x, world_y);
+
+		geometry_msgs::msg::PoseStamped pose;
+		pose.pose.position.x = world_x;
+		pose.pose.position.y = world_y;
+		pose.pose.position.z = 0.0;
+		pose.pose.orientation.x = 0.0;
+		pose.pose.orientation.y = 0.0;
+		pose.pose.orientation.z = 0.0;
+		pose.pose.orientation.w = 1.0;
+		plan.poses.push_back(pose);
+	}
+
+	return !plan.poses.empty();
+}
+
+double AStar::getPointPotential(const geometry_msgs::msg::Point & world_point) {
+	unsigned int mx, my;
+	if (!worldToMap(world_point.x, world_point.y, mx, my)) {
+		return std::numeric_limits<double>::max();
+	}
+
+	unsigned int index = my * planner_->nx + mx;
+	return planner_->potarr[index];
+}
+
+bool AStar::worldToMap(double wx, double wy, unsigned int & mx, unsigned int & my) {
+	if (wx < costmap_->getOriginX() || wy < costmap_->getOriginY()) {
+		return false;
+	}
+
+	mx = static_cast<int>(std::round((wx - costmap_->getOriginX()) / costmap_->getResolution()));
+	my = static_cast<int>(std::round((wy - costmap_->getOriginY()) / costmap_->getResolution()));
+
+	if (mx < costmap_->getSizeInCellsX() && my < costmap_->getSizeInCellsY()) {
+		return true;
+	}
+
+	RCLCPP_ERROR(logger_, "worldToMap failed: mx,my: %d,%d, size_x,size_y: %d,%d", mx, my, costmap_->getSizeInCellsX(), costmap_->getSizeInCellsY());
+
+	return false;
+}
+
+void AStar::mapToWorld(double mx, double my, double & wx, double & wy) {
+	wx = costmap_->getOriginX() + mx * costmap_->getResolution();
+	wy = costmap_->getOriginY() + my * costmap_->getResolution();
+}
+
+void AStar::clearRobotCell(unsigned int mx, unsigned int my) {
+  // TODO(orduno): check usage of this function, might instead be a request to
+  //               world_model / map server
+  costmap_->setCost(mx, my, nav2_costmap_2d::FREE_SPACE);
+}
+
+}
 
 #include "pluginlib/class_list_macros.hpp"
 PLUGINLIB_EXPORT_CLASS(nav2_my_planner::AStar, nav2_core::GlobalPlanner)

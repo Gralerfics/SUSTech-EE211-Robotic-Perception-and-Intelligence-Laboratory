@@ -1,104 +1,99 @@
-/*********************************************************************
- *
- * Software License Agreement (BSD License)
- *
- *  Copyright (c) 2020 Shivang Patel
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *
- * Author: Shivang Patel
- *
- * Reference tutorial:
- * https://navigation.ros.org/tutorials/docs/writing_new_nav2planner_plugin.html
- *********************************************************************/
-
 #ifndef NAV2_MY_PLANNER__MY_PLANNER_HPP_
 #define NAV2_MY_PLANNER__MY_PLANNER_HPP_
 
+#include <chrono>
 #include <string>
 #include <memory>
+#include <vector>
 
-#include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
-
 #include "nav2_core/global_planner.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_util/robot_utils.hpp"
 #include "nav2_util/lifecycle_node.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
+#include "nav2_util/geometry_utils.hpp"
 
-namespace nav2_my_planner
-{
+#include "nav2_my_planner/astar_planner.hpp"
 
-class AStar : public nav2_core::GlobalPlanner
-{
+namespace nav2_my_planner {
+
+class AStar: public nav2_core::GlobalPlanner {
 public:
-  AStar() = default;
-  ~AStar() = default;
+	AStar();
+	~AStar();
+	
+	void configure(
+		const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
+		std::string name,
+		std::shared_ptr<tf2_ros::Buffer> tf,
+		std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros
+	) override;
 
-  // plugin configure
-  void configure(
-    const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-    std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
-    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
+	void cleanup() override;
+	void activate() override;
+	void deactivate() override;
 
-  // plugin cleanup
-  void cleanup() override;
+	nav_msgs::msg::Path createPlan(
+		const geometry_msgs::msg::PoseStamped & start,
+		const geometry_msgs::msg::PoseStamped & goal
+	) override;
 
-  // plugin activate
-  void activate() override;
+protected:
+	bool makePlan(
+		const geometry_msgs::msg::Pose & start,
+		const geometry_msgs::msg::Pose & goal, double tolerance,
+		nav_msgs::msg::Path & plan
+	);
 
-  // plugin deactivate
-  void deactivate() override;
+	bool computePotential(const geometry_msgs::msg::Point & world_point);
 
-  // This method creates path for given start and goal pose.
-  nav_msgs::msg::Path createPlan(
-    const geometry_msgs::msg::PoseStamped & start,
-    const geometry_msgs::msg::PoseStamped & goal) override;
+	bool getPlanFromPotential(
+		const geometry_msgs::msg::Pose & goal,
+		nav_msgs::msg::Path & plan
+	);
 
-private:
-  // TF buffer
-  std::shared_ptr<tf2_ros::Buffer> tf_;
+	void smoothApproachToGoal(
+		const geometry_msgs::msg::Pose & goal,
+		nav_msgs::msg::Path & plan
+	);
 
-  // node ptr
-  nav2_util::LifecycleNode::SharedPtr node_;
+  	double getPointPotential(const geometry_msgs::msg::Point & world_point);
 
-  // Global Costmap
-  nav2_costmap_2d::Costmap2D * costmap_;
+	inline double squared_distance(
+		const geometry_msgs::msg::Pose & p1,
+		const geometry_msgs::msg::Pose & p2
+	) {
+		double dx = p1.position.x - p2.position.x;
+		double dy = p1.position.y - p2.position.y;
+		return dx * dx + dy * dy;
+	}
 
-  // The global frame of the costmap
-  std::string global_frame_, name_;
+	bool worldToMap(double wx, double wy, unsigned int & mx, unsigned int & my);
+	void mapToWorld(double mx, double my, double & wx, double & wy);
 
-  double interpolation_resolution_;
+  	void clearRobotCell(unsigned int mx, unsigned int my);
+
+  	bool isPlannerOutOfDate();
+
+	std::unique_ptr<AStarPlanner> planner_;
+
+	std::shared_ptr<tf2_ros::Buffer> tf_;
+
+	rclcpp::Clock::SharedPtr clock_;
+
+	rclcpp::Logger logger_{rclcpp::get_logger("AStarPlanner")};
+
+	nav2_costmap_2d::Costmap2D * costmap_;
+
+ 	std::string global_frame_, name_;
+
+  	double tolerance_;
+
+  	rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
 };
 
-}  // namespace nav2_my_planner
+}
 
-#endif  // NAV2_MY_PLANNER__MY_PLANNER_HPP_
+#endif

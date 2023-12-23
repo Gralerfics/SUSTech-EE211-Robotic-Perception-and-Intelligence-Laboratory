@@ -50,6 +50,7 @@ set(dependencies
 
 add_library(${library_name} SHARED
   src/my_planner.cpp
+  src/astar_planner.cpp
 )
 
 ament_target_dependencies(${library_name}

@@ -5,7 +5,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.duration import Duration
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Twist
 
 from grasp_interfaces.srv import GraspAction, GraspQuery
 
@@ -50,13 +50,15 @@ def main():
     grasp_action_client.wait_for_service()
     grasp_query_solved_client.wait_for_service()
     grasp_query_holding_client.wait_for_service()
+    
+    cmd_vel_pub = navigator.create_publisher(Twist, 'cmd_vel', 10)
 
     # A
     a_goal = PoseStamped()
     a_goal.header.frame_id = 'map'
     a_goal.header.stamp = navigator.get_clock().now().to_msg()
-    a_goal.pose.position.x = 0.2266274822848437
-    a_goal.pose.position.y = -3.4258465986026695
+    a_goal.pose.position.x = 0.1866274822848437 # 0.2266274822848437
+    a_goal.pose.position.y = -3.3058465986026695 # -3.4258465986026695
     a_goal.pose.orientation.z = -0.6686671777907486
     a_goal.pose.orientation.w = 0.7435618369344646
     go_goal_blocking(navigator, a_goal)
@@ -88,6 +90,12 @@ def main():
     a_goal.pose.orientation.z = -0.007822402212393793
     a_goal.pose.orientation.w = 0.9999694045437728
     go_goal_blocking(navigator, a_goal)
+    # vel_cmd = Twist()
+    # vel_cmd.linear.x = 0.0
+    # vel_cmd.angular.z = 3.1415926 / 4
+    # cmd_vel_pub.publish(vel_cmd)
+    # time.sleep(2.0)
+    # cmd_vel_pub.publish(Twist())
     
     # B
     b_goal = PoseStamped()
@@ -105,22 +113,24 @@ def main():
     rclpy.spin_until_future_complete(navigator, future)
     response = future.result()
     
-    b_goal.pose.orientation.z = 0.924  # 0.9985
-    b_goal.pose.orientation.w = 0.383  # 0.0547
+    b_goal.pose.orientation.z = 0.924 # 0.9985
+    b_goal.pose.orientation.w = 0.383 # 0.0547
     go_goal_blocking(navigator, b_goal)
-    
-    # a_goal.pose.orientation.z = -0.7435618369344646
-    # a_goal.pose.orientation.w = -0.6686671777907486
-    # go_goal_blocking(navigator, a_goal)
+    # vel_cmd = Twist()
+    # vel_cmd.linear.x = 0.0
+    # vel_cmd.angular.z = 3.1415926 / 4
+    # cmd_vel_pub.publish(vel_cmd)
+    # time.sleep(3.0)
+    # cmd_vel_pub.publish(Twist())
     
     # S
     s_goal = PoseStamped()
     s_goal.header.frame_id = 'map'
     s_goal.header.stamp = navigator.get_clock().now().to_msg()
-    s_goal.pose.position.x = 0.3725282477783394
-    s_goal.pose.position.y = -0.45741189949949404
-    s_goal.pose.orientation.z = -0.7000945363954414
-    s_goal.pose.orientation.w = -0.7140501663813629
+    s_goal.pose.position.x = 0.3025282477783394 # 0.3725282477783394
+    s_goal.pose.position.y = -0.40741189949949404 # -0.45741189949949404
+    s_goal.pose.orientation.z = 0.924 # -0.7000945363954414
+    s_goal.pose.orientation.w = 0.383 # -0.7140501663813629
     go_goal_blocking(navigator, s_goal)
 
     # navigator.lifecycleShutdown()
