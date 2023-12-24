@@ -112,44 +112,29 @@ bool AStar::isPlannerOutOfDate() {
 }
 
 bool AStar::makePlan(
-	const geometry_msgs::msg::Pose & start,
-	const geometry_msgs::msg::Pose & goal, double tolerance,
-	nav_msgs::msg::Path & plan
+	const geometry_msgs::msg::Pose& start,
+	const geometry_msgs::msg::Pose& goal,
+	double tolerance,
+	nav_msgs::msg::Path& plan
 ) {
 	plan.poses.clear();
 	plan.header.stamp = clock_->now();
 	plan.header.frame_id = global_frame_;
 
-	double wx = start.position.x;
-	double wy = start.position.y;
-
-	RCLCPP_DEBUG(
-		logger_, "Making plan from (%.2f,%.2f) to (%.2f,%.2f)",
-		start.position.x, start.position.y, goal.position.x, goal.position.y);
-
 	unsigned int mx, my;
-	worldToMap(wx, wy, mx, my);
 
-	// clear the starting cell within the costmap because we know it can't be an obstacle
-	clearRobotCell(mx, my);
-
-	std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
-
-	// make sure to resize the underlying array that Navfn uses
-	planner_->setNavArr(costmap_->getSizeInCellsX(), costmap_->getSizeInCellsY());
-
-	planner_->setCostmap(costmap_->getCharMap(), true, true);
-
-	lock.unlock();
-
+	worldToMap(start.position.x, start.position.y, mx, my);
 	int map_start[2];
 	map_start[0] = mx;
 	map_start[1] = my;
 
-	wx = goal.position.x;
-	wy = goal.position.y;
+	costmap_->setCost(mx, my, nav2_costmap_2d::FREE_SPACE);
+	std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
+	planner_->setNavArr(costmap_->getSizeInCellsX(), costmap_->getSizeInCellsY());
+	planner_->setCostmap(costmap_->getCharMap(), true, true);
+	lock.unlock();
 
-	worldToMap(wx, wy, mx, my);
+	worldToMap(goal.position.x, goal.position.y, mx, my);
 	int map_goal[2];
 	map_goal[0] = mx;
 	map_goal[1] = my;
@@ -166,7 +151,7 @@ bool AStar::makePlan(
 	p = goal;
 	double potential = getPointPotential(p.position);
 	if (potential < POT_HIGH) {
-		// Goal is reachable by itself
+		// 已经到达
 		best_pose = p;
 		found_legal = true;
 	} else {
@@ -195,29 +180,6 @@ bool AStar::makePlan(
 		// extract the plan
 		if (getPlanFromPotential(best_pose, plan)) {
 			smoothApproachToGoal(best_pose, plan);
-
-			// If use_final_approach_orientation=true, interpolate the last pose orientation from the
-			// previous pose to set the orientation to the 'final approach' orientation of the robot so
-			// it does not rotate.
-			// And deal with corner case of plan of length 1
-			if (false) {
-				size_t plan_size = plan.poses.size();
-				if (plan_size == 1) {
-					plan.poses.back().pose.orientation = start.orientation;
-				} else if (plan_size > 1) {
-					double dx, dy, theta;
-					auto last_pose = plan.poses.back().pose.position;
-					auto approach_pose = plan.poses[plan_size - 2].pose.position;
-					// Deal with the case of NavFn producing a path with two equal last poses
-					if (std::abs(last_pose.x - approach_pose.x) < 0.0001 && std::abs(last_pose.y - approach_pose.y) < 0.0001 && plan_size > 2) {
-						approach_pose = plan.poses[plan_size - 3].pose.position;
-					}
-					dx = last_pose.x - approach_pose.x;
-					dy = last_pose.y - approach_pose.y;
-					theta = atan2(dy, dx);
-					plan.poses.back().pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(theta);
-				}
-			}
 		} else {
 			RCLCPP_ERROR(logger_, "Failed to create a plan from potential when a legal potential was found. This shouldn't happen.");
 		}
@@ -310,32 +272,20 @@ double AStar::getPointPotential(const geometry_msgs::msg::Point & world_point) {
 	return planner_->potarr[index];
 }
 
-bool AStar::worldToMap(double wx, double wy, unsigned int & mx, unsigned int & my) {
-	if (wx < costmap_->getOriginX() || wy < costmap_->getOriginY()) {
-		return false;
-	}
+bool AStar::worldToMap(double wx, double wy, unsigned int& mx, unsigned int& my) {
+	if (wx < costmap_->getOriginX() || wy < costmap_->getOriginY()) return false;
 
 	mx = static_cast<int>(std::round((wx - costmap_->getOriginX()) / costmap_->getResolution()));
 	my = static_cast<int>(std::round((wy - costmap_->getOriginY()) / costmap_->getResolution()));
-
-	if (mx < costmap_->getSizeInCellsX() && my < costmap_->getSizeInCellsY()) {
-		return true;
-	}
+	if (mx < costmap_->getSizeInCellsX() && my < costmap_->getSizeInCellsY()) return true;
 
 	RCLCPP_ERROR(logger_, "worldToMap failed: mx,my: %d,%d, size_x,size_y: %d,%d", mx, my, costmap_->getSizeInCellsX(), costmap_->getSizeInCellsY());
-
 	return false;
 }
 
-void AStar::mapToWorld(double mx, double my, double & wx, double & wy) {
+void AStar::mapToWorld(double mx, double my, double& wx, double& wy) {
 	wx = costmap_->getOriginX() + mx * costmap_->getResolution();
 	wy = costmap_->getOriginY() + my * costmap_->getResolution();
-}
-
-void AStar::clearRobotCell(unsigned int mx, unsigned int my) {
-  // TODO(orduno): check usage of this function, might instead be a request to
-  //               world_model / map server
-  costmap_->setCost(mx, my, nav2_costmap_2d::FREE_SPACE);
 }
 
 }

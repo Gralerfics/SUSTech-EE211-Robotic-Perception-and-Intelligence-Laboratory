@@ -73,8 +73,6 @@ protected:
 	bool worldToMap(double wx, double wy, unsigned int & mx, unsigned int & my);
 	void mapToWorld(double mx, double my, double & wx, double & wy);
 
-  	void clearRobotCell(unsigned int mx, unsigned int my);
-
   	bool isPlannerOutOfDate();
 
 	std::unique_ptr<AStarPlanner> planner_;
