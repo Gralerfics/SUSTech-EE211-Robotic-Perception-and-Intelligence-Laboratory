@@ -152,17 +152,23 @@ class ArucoNode(rclpy.node.Node):
     def info_callback(self, info_msg):
         self.info_msg = info_msg
         
-        # self.intrinsic_mat = np.reshape(np.array(self.info_msg.k), (3, 3))
+        self.intrinsic_mat = np.reshape(np.array(self.info_msg.k), (3, 3))
+        # self.get_logger().info(f"Intrinsic matrix: {self.intrinsic_mat}")
+        # self.intrinsic_mat = np.array([
+        #     [908.52661133, 0, 647.62316895],
+        #     [0, 908.74725342, 370.019104],
+        #     [0, 0, 1]
+        # ])
         # self.intrinsic_mat = np.array([
         #     [954.997986, 0.000000, 645.128211],
         #     [0.000000, 958.522095, 382.981208],
         #     [0.000000, 0.000000, 1.000000]
         # ])
-        self.intrinsic_mat = np.array([
-            [913.323418, 0.000000, 628.185869],
-            [0.000000, 905.890072, 377.754608],
-            [0.000000, 0.000000, 1.000000]
-        ])
+        # self.intrinsic_mat = np.array([
+        #     [913.323418, 0.000000, 628.185869],
+        #     [0.000000, 905.890072, 377.754608],
+        #     [0.000000, 0.000000, 1.000000]
+        # ])
         
         # self.distortion = np.array(self.info_msg.d)
         # self.distortion = np.array([0.092492, -0.174237, 0.004543, -0.000519, 0.000000])

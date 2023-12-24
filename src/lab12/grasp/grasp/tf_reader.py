@@ -10,7 +10,7 @@ class TF_Reader(Node):
         super().__init__("tf_reader")
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.read_timer = self.create_timer(0.5, self.timer_cb)
+        self.read_timer = self.create_timer(0.05, self.timer_cb)
         self.trans = None
     
     def get_arm_to_cam(self):

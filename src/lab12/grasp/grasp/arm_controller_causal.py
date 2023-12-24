@@ -38,7 +38,6 @@ class ArmController(Node):
         self.cnt = 0
         self.thred = 0.1
         self.joint_pos = []
-        self.moving_time = 2.0
         self.num_joints = 4
         
         self.joint_lower_limits = [-1.5, -0.4, -1.6, -1.8]
@@ -48,7 +47,7 @@ class ArmController(Node):
         self.initial_guesses[1][0] = np.deg2rad(-30)
         self.initial_guesses[2][0] = np.deg2rad(30)
 
-        self.shoulder_offset = -0.05 # gravity compensation
+        self.shoulder_offset = -0.1 # gravity compensation
 
         # [ application ]
         self.arm_target_pose_pub = self.create_publisher(PoseStamped, '/arm_target_pose', 10)
@@ -56,7 +55,7 @@ class ArmController(Node):
         self.block_center_pose_pub = self.create_publisher(PoseStamped, '/block_center_pose', 10)
         self.aruco_poses_sub = self.create_subscription(PoseArray, '/aruco_poses', self.aruco_poses_callback, 10)
         
-        self.block_length = 0.04
+        self.block_length = 0.035
         self.aruco_expired_time = 1.0
         self.aruco_poses = None
         self.machine_state = 'INIT'
@@ -162,7 +161,10 @@ class ArmController(Node):
         return mr.FKinSpace(self.robot_des.M, self.robot_des.Slist, joint_state)
 
     def go_home(self):
-        return self.set_group_pos([1.57, self.shoulder_offset, 1.5, -1.5])
+        return self.set_group_pos([1.5, self.shoulder_offset, 1.5, -1.5])
+
+    def go_frontier(self):
+        return self.set_group_pos([0, self.shoulder_offset, 1.5, -1.5])
     
     def go_handup(self):
         return self.set_group_pos([1.5, self.shoulder_offset, -1.4, 0.0])
@@ -175,7 +177,7 @@ class ArmController(Node):
                 M = self.robot_des.M,
                 T = T_sd,
                 thetalist0 = guess,
-                eomg = 0.1,
+                eomg = 0.02,
                 ev = 0.002,
             )
             solution_valid = False
@@ -187,11 +189,11 @@ class ArmController(Node):
             if solution_valid and execute:
                 # target joints
                 joint_list = [theta_list[0], theta_list[1] + self.shoulder_offset, theta_list[2], theta_list[3]]
-                                                    # TODO BEGIN: 直接写死
+                # TODO BEGIN
                 # if joint_list[0] > 0:
                 #     joint_list[0] *= 1.09
-                joint_list[0] += 0.075 # 0.015
-                                                    # TODO END
+                joint_list[0] += 0.06 # 0.075 # 0.015
+                # TODO END
                 
                 # substitute custom joints
                 if (custom_joints is not None) and (len(custom_joints) == self.num_joints):
@@ -285,7 +287,7 @@ class ArmController(Node):
         if len(self.joint_pos) == 7:
             if self.machine_state == 'INIT':
                 self.get_logger().info('Initializing pan tilt and arm ...')
-                self.pan_tilt(pitch = 15.0, yaw = 0.0, speed = 10)
+                self.pan_tilt(pitch = 15.0, yaw = 0.0, speed = 20)
                 if self.go_home() and self.gripper(1.5, 0.5):
                     self.get_logger().info('Ready.')
                     self.machine_state = 'DETECT'
@@ -310,8 +312,11 @@ class ArmController(Node):
                     
                     # Correct action_matrix translation and compute valid action_matrix orientation
                     self.action_matrix = T_0a
-                    self.action_matrix = radius_oriented_offset(self.action_matrix, -0.02, 0.01)
+                    self.action_matrix = radius_oriented_offset(self.action_matrix, -0.06, 0.005)
                     self.action_matrix = substitute_R(self.action_matrix)
+                    self.ahead_action_matrix = T_0a
+                    self.ahead_action_matrix = radius_oriented_offset(self.ahead_action_matrix, 0.02, 0.005)
+                    self.ahead_action_matrix = substitute_R(self.ahead_action_matrix)
                     
                     # Publish selected aruco pose
                     aruco_target_pose = PoseStamped()
@@ -335,9 +340,11 @@ class ArmController(Node):
                     self.arm_target_pose_pub.publish(arm_target_pose)
                     
                     # Test solution
-                    _, solution_found, solution_valid, reached = self.matrix_control(self.action_matrix, execute = False)
-                    self.get_logger().info(f'Solution found: {solution_found}; solution valid: {solution_valid}.')
-                    self.is_solved = solution_valid
+                    _, solution_found_frontier, solution_valid_frontier, _ = self.matrix_control(self.action_matrix, execute = False)
+                    self.get_logger().info(f'[Frontier] Solution found: {solution_found_frontier}; solution valid: {solution_valid_frontier}.')
+                    _, solution_found_ahead, solution_valid_ahead, _ = self.matrix_control(self.ahead_action_matrix, execute = False)
+                    self.get_logger().info(f'[Ahead] Solution found: {solution_found_ahead}; solution valid: {solution_valid_ahead}.')
+                    self.is_solved = solution_valid_frontier and solution_valid_ahead
                     
                     # Execute solution or block
                     if self.is_solved and self.allow_execute_trigger:
@@ -356,10 +363,27 @@ class ArmController(Node):
                 )
                 if reached:
                     self.get_logger().info('Done.')
-                    self.machine_state = 'GRASP'
-            elif self.machine_state == 'GRASP':
-                self.get_logger().info('Grasping ...')
+                    self.machine_state = 'GO_FRONTIER'
+            elif self.machine_state == 'GO_FRONTIER':
+                self.get_logger().info('Going frontier ...')
                 _, solution_found, solution_valid, reached = self.matrix_control(self.action_matrix, delay = 1.0)
+                if reached:
+                    self.get_logger().info('done.')
+                    self.machine_state = 'GO_AHEAD'
+                    # self.action_matrix = radius_oriented_offset(self.action_matrix, 0.1, 0.00)
+                    
+                    # if len(self.joint_pos) == 7:
+                    #     t1 = np.pi / 2 - self.joint_pos[1]
+                    #     t2 = -np.pi / 2 - self.joint_pos[2]
+                    #     h = np.sin(t1) + np.sin(t1 + t2)
+                    #     self.nt1 = np.arcsin(h) - np.pi / 2
+                    #     self.nt2 = -np.arcsin(h) + np.pi / 2
+                    #     self.get_logger().info(f't1: {np.rad2deg(t1)}, t2: {np.rad2deg(t2)}, h: {h}, nt1: {np.rad2deg(self.nt1)}, nt2: {np.rad2deg(self.nt2)}')
+                    #     self.machine_state = 'GO_AHEAD'
+            elif self.machine_state == 'GO_AHEAD':
+                self.get_logger().info('Going ahead ...')
+                # reached = self.set_single_pos('shoulder', -self.nt1) and self.set_single_pos('elbow', -self.nt2) and self.set_single_pos('wrist_angle', 0.0)
+                _, solution_found, solution_valid, reached = self.matrix_control(self.ahead_action_matrix, delay = 1.0)
                 if reached:
                     self.get_logger().info('done.')
                     self.gripper(0.7, 1.0)
@@ -376,5 +400,5 @@ class ArmController(Node):
             elif self.machine_state == 'RELEASE':
                 self.machine_state = 'INIT' # TODO
             else:
-                self.get_logger().info('Unvalid machine state.')
+                self.get_logger().info('Invalid machine state.')
 
