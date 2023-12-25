@@ -39,6 +39,7 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseArray, Pose
 from ros2_aruco_interfaces.msg import ArucoMarkers
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+from std_msgs.msg import Int32MultiArray
 
 
 class ArucoNode(rclpy.node.Node):
@@ -137,6 +138,7 @@ class ArucoNode(rclpy.node.Node):
         )
 
         # Set up publishers
+        self.pixel_pub = self.create_publisher(Int32MultiArray, "aruco_pixel", 10)
         self.poses_pub = self.create_publisher(PoseArray, "aruco_poses", 10)
         self.markers_pub = self.create_publisher(ArucoMarkers, "aruco_markers", 10)
 
@@ -226,6 +228,14 @@ class ArucoNode(rclpy.node.Node):
                 markers.poses.append(pose)
                 markers.marker_ids.append(marker_id[0])
 
+            x_sum = corners[0][0][0][0] + corners[0][0][1][0] + corners[0][0][2][0] + corners[0][0][3][0]
+            y_sum = corners[0][0][0][1] + corners[0][0][1][1] + corners[0][0][2][1] + corners[0][0][3][1]
+            x_centerPixel = x_sum / 4
+            y_centerPixel = y_sum / 4
+            msg = Int32MultiArray()
+            msg.data = [int(x_centerPixel), int(y_centerPixel)]
+            
+            self.pixel_pub.publish(msg)
             self.poses_pub.publish(pose_array)
             self.markers_pub.publish(markers)
 

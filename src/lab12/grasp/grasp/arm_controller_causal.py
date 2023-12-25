@@ -321,7 +321,7 @@ class ArmController(Node):
             elif self.machine_state == 'DETECT':
                 current_aruco_pose = self.get_active_aruco_pose()
                 if current_aruco_pose:
-                    self.get_logger().info('Aruco detected.')
+                    # self.get_logger().info('Aruco detected.')
                     
                     # Compute T_0a
                     # TODO: 每次刚 bringup 后的第一次运行会出现 action_matrix 高出正确位置一截的情况（猜测是 T_0c 的问题，没具体检查）
@@ -368,8 +368,8 @@ class ArmController(Node):
                     _, solution_found_frontier, solution_valid_frontier, _ = self.matrix_control(self.action_matrix, execute = False)
                     _, solution_found_ahead, solution_valid_ahead, _ = self.matrix_control(self.ahead_action_matrix, execute = False)
                     self.is_solved = solution_valid_frontier and solution_valid_ahead
-                    self.get_logger().info(f'[Frontier] Solution found: {solution_found_frontier}; solution valid: {solution_valid_frontier}.')
-                    self.get_logger().info(f'[Ahead] Solution found: {solution_found_ahead}; solution valid: {solution_valid_ahead}.')
+                    # self.get_logger().info(f'[Frontier] Solution found: {solution_found_frontier}; solution valid: {solution_valid_frontier}.')
+                    # self.get_logger().info(f'[Ahead] Solution found: {solution_found_ahead}; solution valid: {solution_valid_ahead}.')
                     
                     # Execute solution or block
                     if self.is_solved and self.allow_execute_trigger:

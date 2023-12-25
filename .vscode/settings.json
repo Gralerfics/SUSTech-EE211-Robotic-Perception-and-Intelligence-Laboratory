@@ -6,7 +6,8 @@
         "./install/grasp_interfaces/local/lib/python3.10/dist-packages/"
     ],
     "cmake.sourceDirectory": [
-        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/src/nav2_my_planner"
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/src/nav2_my_planner",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/src/nav2_my_controller"
     ],
     "files.associations": {
         "cctype": "cpp",

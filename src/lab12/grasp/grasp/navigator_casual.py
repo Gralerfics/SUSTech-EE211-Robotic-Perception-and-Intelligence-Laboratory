@@ -12,6 +12,8 @@ from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
+from pan_tilt_msgs.msg import PanTiltCmdDeg
+from std_msgs.msg import Int32MultiArray
 
 from grasp_interfaces.srv import GraspAction, GraspQuery
 
@@ -56,10 +58,18 @@ class TemporaryCommander(Node):
         super().__init__('temporary_commander')
         
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.amcl_pose_sub = self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10)
-        self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, QoSProfile(depth = 10, reliability = ReliabilityPolicy.BEST_EFFORT))
         
+        self.pantil_pub = self.create_publisher(PanTiltCmdDeg, '/pan_tilt_cmd_deg', 10)
+        self.pan_tilt_pitch = 15.0
+        self.pan_tilt_yaw = 0.0
+        
+        self.aruco_pixel_sub = self.create_subscription(Int32MultiArray, '/aruco_pixel', self.aruco_pixel_callback, 10)
+        self.aruco_pixel_x, self.aruco_pixel_y = 1280 // 2, 720 // 2
+        
+        self.amcl_pose_sub = self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10)
         self.amcl_pose = None
+        
+        self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, QoSProfile(depth = 10, reliability = ReliabilityPolicy.BEST_EFFORT))
         self.odom = None
     
     def warp_angle(self, angle):
@@ -73,6 +83,9 @@ class TemporaryCommander(Node):
         q_0, q_1, q_2, q_3 = quaternion.w, quaternion.x, quaternion.y, quaternion.z
         return math.atan2(2 * (q_0 * q_3 + q_1 * q_2), 1 - 2 * (q_2 * q_2 + q_3 * q_3))
     
+    def aruco_pixel_callback(self, msg):
+        self.aruco_pixel_x, self.aruco_pixel_y = msg.data[0], msg.data[1]
+    
     def amcl_pose_callback(self, msg):
         self.amcl_pose = msg
     
@@ -84,8 +97,27 @@ class TemporaryCommander(Node):
             return None
         return self.warp_angle(self.quaternion_to_yaw(self.amcl_pose.pose.pose.orientation))
     
+    def pan_tilt(self, pitch, yaw, speed):
+        pan_tilt_deg_cmd = PanTiltCmdDeg()
+        pan_tilt_deg_cmd.pitch = pitch
+        pan_tilt_deg_cmd.yaw = yaw
+        pan_tilt_deg_cmd.speed = speed
+        self.pantil_pub.publish(pan_tilt_deg_cmd)
+    
+    def cmd_vel(self, linear_x = 0, angular_z = 0):
+        cmd = Twist()
+        cmd.linear.x = linear_x
+        cmd.angular.z = angular_z
+        self.cmd_vel_pub.publish(cmd)
+    
+    def update_pan_tilt(self, pitch = 15.0, yaw = 0.0, speed = 20):
+        self.pan_tilt_pitch = pitch
+        self.pan_tilt_yaw = yaw
+        self.pan_tilt(pitch = self.pan_tilt_pitch, yaw = self.pan_tilt_yaw, speed = speed)
+        time.sleep(1.0) # TODO: remove
+    
     def stop(self):
-        self.cmd_vel_pub.publish(Twist())
+        self.cmd_vel()
     
     def turn_to_yaw(self, yaw, error_threshold = 0.1, command_threshold = 0.1):
         while self.amcl_pose is None:
@@ -103,8 +135,7 @@ class TemporaryCommander(Node):
             yaw_error = self.warp_angle(yaw - self.get_current_yaw())
             # self.get_logger().info(f'yaw: {np.rad2deg(self.get_current_yaw())}, yaw_target: {np.rad2deg(yaw)}, yaw_error: {np.rad2deg(yaw_error)}')
             omega = controller.update(yaw_error, dt)
-            cmd.angular.z = omega
-            self.cmd_vel_pub.publish(cmd)
+            self.cmd_vel(angular_z = omega)
             
             rclpy.spin_once(self, timeout_sec = 0.02)
             
@@ -263,56 +294,71 @@ def main():
     # Initialization
     navigator.initialize(initial_pose)
     
-    # Go to A
-    navigator.go_to_goal(goal_A, blocking = False)
+    # # Go to A
+    # navigator.go_to_goal(goal_A, blocking = False)
     
-    # - Check aruco insight
-    insight = False
-    while not navigator.isTaskComplete():
-        block_pose = temporary_client.get_block_center_pose()
-        if block_pose is not None:
-            d = math.sqrt(block_pose.pose.position.x ** 2 + block_pose.pose.position.y ** 2)
-            temporary_client.get_logger().info(f'aruco detected {d} meters away.')
-            if d < 1.5:
-                insight = True
-                break
-            else:
-                continue
-        temporary_client.get_logger().info(f'checking aruco insight ...')
+    # # - Check aruco insight
+    # insight = False
+    # while not navigator.isTaskComplete():
+    #     block_pose = temporary_client.get_block_center_pose()
+    #     if block_pose is not None:
+    #         d = math.sqrt(block_pose.pose.position.x ** 2 + block_pose.pose.position.y ** 2)
+    #         temporary_client.get_logger().info(f'aruco detected {d} meters away.')
+    #         if d < 1.5:
+    #             insight = True
+    #             break
+    #         else:
+    #             continue
+    #     temporary_client.get_logger().info(f'checking aruco insight ...')
+    
+    insight = True # TODO: remove
     
     # - Approach to block
     if insight:
-        navigator.cancelTask()
+        # navigator.cancelTask()
         
-        # Go to B_frontier
-        navigator.go_to_goal(goal_B_frontier)
+        # # Go to B_frontier
+        # navigator.go_to_goal(goal_B_frontier)
         
-        # Approach, TODO: do not see?
-        block_pose = temporary_client.get_block_center_pose()
-        if block_pose is not None:
-            T_0a = pose_to_matrix(block_pose)
-            T_ba = np.dot(T_b0, T_0a)
-            
-            dx, dy = T_ba[0, 3], T_ba[1, 3]
-            x = T_ba[:3, 0]
-            y = T_ba[:3, 1]
-            z = T_ba[:3, 2]
-            dir = np.array([dx, dy, 0])
-            dotmax_axis = x
-            if abs(dir * y) < abs(dir * dotmax_axis):
-                dotmax_axis = y
-            if abs(dir * z) < abs(dir * dotmax_axis):
-                dotmax_axis = z
-            
-            # 确认 base_link 的坐标轴？
-            # dotmax_axis /= np.linalg.norm(dotmax_axis) # normalize
-            dist_base_to_block = 0.35
-            dx += dotmax_axis[0] * dist_base_to_block
-            dy += dotmax_axis[1] * dist_base_to_block
-            
-            # TODO
+        # Approaching
+        while True:
+            block_pose = temporary_client.get_block_center_pose()
+            if block_pose is not None:
+                T_0a = pose_to_matrix(block_pose.pose)
+                T_ba = np.dot(T_b0, T_0a)
+                dx, dy = T_ba[0, 3], T_ba[1, 3]
+                
+                x = T_ba[:3, 0]
+                y = T_ba[:3, 1]
+                z = T_ba[:3, 2]
+                dir = np.array([dx, dy, 0])
+                dotmax_axis = x
+                if np.linalg.norm(dir * y) < np.linalg.norm(dir * dotmax_axis):
+                    dotmax_axis = y
+                if np.linalg.norm(dir * z) < np.linalg.norm(dir * dotmax_axis):
+                    dotmax_axis = z
+                
+                dotmax_axis /= np.linalg.norm(dotmax_axis) # normalize, TODO: remove?
+                dist_base_to_block = 0.35
+                dx += dotmax_axis[0] * dist_base_to_block
+                dy += dotmax_axis[1] * dist_base_to_block
+                # TODO: cmd
+                
+                # turn pan_tilt
+                if temporary_commander.aruco_pixel_x < 1280 // 4 or temporary_commander.aruco_pixel_x > 1280 // 4 * 3:
+                    yaw = (1280 // 2 - temporary_commander.aruco_pixel_x) / 1280 * 69.4
+                    yaw = np.clip(yaw, -30, 30)
+                    temporary_commander.update_pan_tilt(yaw = yaw)
+                
+                rclpy.spin_once(temporary_commander, timeout_sec = 0.02)
+            else:
+                pass # TODO: do not see?
     else:
         pass # TODO: look around
+    
+    # Recover the pan_tilt
+    # temporary_commander.update_pan_tilt(yaw = 0.0)
+    # time.sleep(2.0)
     
     # Grasp
     temporary_client.grasp_action('grasp')
