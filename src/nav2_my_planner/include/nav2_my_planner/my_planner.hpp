@@ -54,17 +54,10 @@ protected:
 		nav_msgs::msg::Path & plan
 	);
 
-<<<<<<< HEAD
-    bool getPlan(
-            const geometry_msgs::msg::Pose & goal,
-            nav_msgs::msg::Path & plan
-    );
-=======
 	bool getPlan(
 		const geometry_msgs::msg::Pose & goal,
 		nav_msgs::msg::Path & plan
 	);
->>>>>>> d479e50 (bkup.)
 
 	void smoothApproachToGoal(
 		const geometry_msgs::msg::Pose & goal,

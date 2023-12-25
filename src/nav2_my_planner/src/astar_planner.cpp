@@ -256,14 +256,14 @@ namespace nav2_my_planner {
         nobs = ntot;
     }
 
-    struct Node {
+    struct PathNode {
         int x, y;
         COSTTYPE g; // 累积成本
-        Node *parent;
+        PathNode *parent;
 
-        Node(int x, int y, COSTTYPE g_cost, Node *p = nullptr) : x(x), y(y), g(g_cost), parent(p) {}
+        PathNode(int x, int y, COSTTYPE g_cost, PathNode *p = nullptr) : x(x), y(y), g(g_cost), parent(p) {}
 
-        COSTTYPE f(const Node &goal) const {
+        COSTTYPE f(const PathNode &goal) const {
             // 欧氏距离作为启发式
             return g + static_cast<COSTTYPE>(std::sqrt(std::pow(goal.x - x, 2) + std::pow(goal.y - y, 2)));
         }
@@ -283,25 +283,25 @@ namespace nav2_my_planner {
 
         npath = 0;
 
-        std::priority_queue < std::pair < COSTTYPE, Node >, std::vector < std::pair < COSTTYPE, Node >>, std::greater<>>
+        std::priority_queue < std::pair < COSTTYPE, PathNode >, std::vector < std::pair < COSTTYPE, PathNode >>, std::greater<>>
         openSet;
-        std::unordered_map<int, Node> allNodes;
+        std::unordered_map<int, PathNode> allNodes;
 
-        Node startNode(start[0], start[1], 0);
-        Node goalNode(goal[0], goal[1], 0);
+        PathNode startNode(start[0], start[1], 0);
+        PathNode goalNode(goal[0], goal[1], 0);
 
         openSet.emplace(0, startNode);
         allNodes[startNode.x + nx * startNode.y] = startNode;
 
         while (!openSet.empty() && maxIterations > 0) {
-            Node current = openSet.top().second;
+            PathNode current = openSet.top().second;
             openSet.pop();
             maxIterations--;
 
             if (current.x == goal[0] && current.y == goal[1]) {
                 // 路径找到
-                std::vector <Node> tempPath;
-                for (Node *node = &allNodes[current.x + nx * current.y]; node != nullptr; node = node->parent) {
+                std::vector <PathNode> tempPath;
+                for (PathNode *node = &allNodes[current.x + nx * current.y]; node != nullptr; node = node->parent) {
                     tempPath.push_back(*node);
                 }
 
@@ -320,7 +320,7 @@ namespace nav2_my_planner {
                     int newX = current.x + dx;
                     int newY = current.y + dy;
                     if (newX >= 0 && newX < nx && newY >= 0 && newY < ny && costarr[newY * nx + newX] < COST_OBS) {
-                        Node neighbor(newX, newY, current.g + 1, &allNodes[current.x + nx * current.y]);
+                        PathNode neighbor(newX, newY, current.g + 1, &allNodes[current.x + nx * current.y]);
                         if (pending[newY * nx + newX]) continue;
                         pending[newY * nx + newX] = true;
                         openSet.emplace(neighbor.f(goalNode), neighbor);
@@ -339,7 +339,5 @@ namespace nav2_my_planner {
 
         return npath;
     }
-
-}
 
 }

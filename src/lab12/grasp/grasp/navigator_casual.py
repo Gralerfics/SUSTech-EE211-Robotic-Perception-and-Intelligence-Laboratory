@@ -133,7 +133,7 @@ class TemporaryCommander(Node):
         pan_tilt_deg_cmd.speed = speed
         self.pantil_pub.publish(pan_tilt_deg_cmd)
     
-    def cmd_vel(self, linear_x = 0, angular_z = 0):
+    def cmd_vel(self, linear_x = 0.0, angular_z = 0.0):
         cmd = Twist()
         cmd.linear.x = linear_x
         cmd.angular.z = angular_z
@@ -277,13 +277,13 @@ def main():
     goal_A.pose.orientation.z = -0.6686671777907486
     goal_A.pose.orientation.w = 0.7435618369344646
     
-    goal_B_frontier = PoseStamped()
-    goal_B_frontier.header.frame_id = 'map'
-    goal_B_frontier.header.stamp = navigator.get_clock().now().to_msg()
-    goal_B_frontier.pose.position.x = 0.2266274822848437
-    goal_B_frontier.pose.position.y = -2.7258465986026695
-    goal_B_frontier.pose.orientation.z = -0.6686671777907486
-    goal_B_frontier.pose.orientation.w = 0.7435618369344646
+    # goal_B_frontier = PoseStamped()
+    # goal_B_frontier.header.frame_id = 'map'
+    # goal_B_frontier.header.stamp = navigator.get_clock().now().to_msg()
+    # goal_B_frontier.pose.position.x = 0.2266274822848437
+    # goal_B_frontier.pose.position.y = -2.7258465986026695
+    # goal_B_frontier.pose.orientation.z = -0.6686671777907486
+    # goal_B_frontier.pose.orientation.w = 0.7435618369344646
     
     goal_B = PoseStamped()
     goal_B.header.frame_id = 'map'
@@ -314,7 +314,7 @@ def main():
         if block_pose is not None:
             d = math.sqrt(block_pose.pose.position.x ** 2 + block_pose.pose.position.y ** 2)
             temporary_client.get_logger().info(f'aruco detected {d} meters away.')
-            if d < 1.2:
+            if d < 0.6:
                 insight = True
                 navigator.cancelTask()
                 break
@@ -324,19 +324,26 @@ def main():
     
     # Approach to block
     if insight:
-        ctrl_linear = PIDController(0.5, 0.01, 0.1, min_output = 0.0, max_output = 0.2)
-        ctrl_angular = PIDController(0.5, 0.01, 0.1, min_output = -0.5, max_output = 0.5)
-        last_time = temporary_commander.get_clock().now().to_msg().nanosec / 1e9
-        while True:
-            temporary_commander.get_logger().info(f'approaching ...')
-            current_time = temporary_commander.get_clock().now().to_msg().nanosec / 1e9
-            dt = current_time - last_time
-            last_time = current_time
+        block_pose = temporary_client.get_block_center_pose()
+        if block_pose is not None: # TODO
+            # Turn to block
+            T_0a = pose_to_matrix(block_pose.pose)
+            T_ba = np.dot(T_b0, T_0a)
+            dx, dy = T_ba[0, 3], T_ba[1, 3]
             
-            block_pose = temporary_client.get_block_center_pose()
-            if block_pose is not None:
-                T_0a = pose_to_matrix(block_pose.pose)
-        
+            while temporary_commander.amcl_pose is None:
+                rclpy.spin_once(temporary_commander)
+            yaw = temporary_commander.warp_angle(temporary_commander.get_current_yaw() + np.arctan2(dy, dx))
+            temporary_commander.turn_to_yaw(yaw)
+            
+            # Move slowly
+            while True:
+                is_solved = temporary_client.grasp_query_solved()
+                if is_solved:
+                    temporary_commander.stop()
+                    break
+                temporary_commander.cmd_vel(linear_x = 0.03)
+            time.sleep(1.5)
     else:
         pass # TODO: look around
     
@@ -445,7 +452,7 @@ def main():
     # Check, TODO: Judge whether the grasp is successful (by checking the aruco insight) -> regrasp
 
     # Go to B
-    temporary_commander.turn_to_yaw(np.deg2rad(0))
+    temporary_commander.turn_to_yaw(np.deg2rad(45))
     navigator.go_to_goal(goal_B)
     
     # Release, TODO: in place

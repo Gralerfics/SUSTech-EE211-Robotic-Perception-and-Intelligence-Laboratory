@@ -51,15 +51,6 @@ Returns length of plan if found, and fills an array with x,y interpolated
 positions at about 1/2 cell resolution; else returns 0.
 */
 
-struct Node {
-	int x, y;
-	COSTTYPE g; // Cumulative cost
-	Node *parent;
-
-	Node(int x, int y, COSTTYPE g_cost, Node *p = nullptr);
-	COSTTYPE f(const Node &goal) const;
-};
-
 int create_nav_plan_astar(
   const COSTTYPE * costmap, int nx, int ny,
   int * goal, int * start,
@@ -122,11 +113,7 @@ public:
 
 	float last_path_cost_;  /**< Holds the cost of the path found the last time A* was called */
 
-<<<<<<< HEAD
-	int calcPath(int maxcycles);
-=======
 	int calcPath(int n);
->>>>>>> d479e50 (bkup.)
 
 	float gradCell(int n);  /**< calculates gradient at cell <n>, returns norm */
 
