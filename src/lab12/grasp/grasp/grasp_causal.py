@@ -12,7 +12,7 @@ def main():
         
         # wait for tf to be ready
         tf_reader = TF_Reader()
-        while (tf_reader.get_arm_to_cam() == None):
+        while tf_reader.get_arm_to_cam() is None:
             rclpy.spin_once(tf_reader)
         
         arm_controller = ArmController(tf_reader)

@@ -2,6 +2,7 @@ import time
 import math
 
 import numpy as np
+import tf_transformations
 
 import rclpy
 from rclpy.node import Node
@@ -13,6 +14,8 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 
 from grasp_interfaces.srv import GraspAction, GraspQuery
+
+from .tf_reader import TF_Reader
 
 
 class PIDController:
@@ -130,7 +133,8 @@ class TemporaryClient(Node):
     def block_center_pose_callback(self, msg):
         self.block_center_pose = msg
     
-    def get_block_center_pose(self):
+    def get_block_center_pose(self, timeout_sec = 0.1):
+        rclpy.spin_once(self, timeout_sec = timeout_sec)
         if self.block_center_pose is None or self.block_center_pose.header.stamp.sec + self.block_center_pose_expire_time < self.get_clock().now().to_msg().sec:
             return None
         return self.block_center_pose
@@ -182,15 +186,40 @@ class MyNavigator(BasicNavigator):
             return None
 
 
+def transform_to_matrix(trans):
+    translation = np.array([trans.translation.x, trans.translation.y, trans.translation.z])
+    rotation = [trans.rotation.x, trans.rotation.y, trans.rotation.z, trans.rotation.w]
+    R = tf_transformations.quaternion_matrix(rotation)
+    matrix = np.eye(4)
+    matrix[:3, :3] = R[:3, :3]
+    matrix[:3, 3] = translation
+    return matrix
+
+def pose_to_matrix(pose):
+    translation = np.array([pose.position.x, pose.position.y, pose.position.z])
+    rotation = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+    R = tf_transformations.quaternion_matrix(rotation)
+    matrix = np.eye(4)
+    matrix[:3, :3] = R[:3, :3]
+    matrix[:3, 3] = translation
+    return matrix
+
+
 def main():
     rclpy.init()
-
+    
+    # Wait for tf to be ready
+    tf_reader = TF_Reader()
+    while tf_reader.get_arm_to_base() is None:
+        rclpy.spin_once(tf_reader)
+    T_b0 = transform_to_matrix(tf_reader.get_arm_to_base().transform)
+    
     # Nodes
     navigator = MyNavigator()
     temporary_client = TemporaryClient()
     temporary_commander = TemporaryCommander()
     
-    # Initialization
+    # Points
     initial_pose = PoseStamped()
     initial_pose.header.frame_id = 'map'
     initial_pose.header.stamp = navigator.get_clock().now().to_msg()
@@ -198,78 +227,113 @@ def main():
     initial_pose.pose.position.y = -0.36741189949949404
     initial_pose.pose.orientation.z = -0.7140501663813629
     initial_pose.pose.orientation.w = 0.7000945363954414
+
+    goal_A = PoseStamped()
+    goal_A.header.frame_id = 'map'
+    goal_A.header.stamp = navigator.get_clock().now().to_msg()
+    goal_A.pose.position.x = 0.2266274822848437
+    goal_A.pose.position.y = -3.4258465986026695
+    goal_A.pose.orientation.z = -0.6686671777907486
+    goal_A.pose.orientation.w = 0.7435618369344646
+    
+    goal_B_frontier = PoseStamped()
+    goal_B_frontier.header.frame_id = 'map'
+    goal_B_frontier.header.stamp = navigator.get_clock().now().to_msg()
+    goal_B_frontier.pose.position.x = 0.2266274822848437
+    goal_B_frontier.pose.position.y = -2.7258465986026695
+    goal_B_frontier.pose.orientation.z = -0.6686671777907486
+    goal_B_frontier.pose.orientation.w = 0.7435618369344646
+    
+    goal_B = PoseStamped()
+    goal_B.header.frame_id = 'map'
+    goal_B.header.stamp = navigator.get_clock().now().to_msg()
+    goal_B.pose.position.x = 2.8567487875336247
+    goal_B.pose.position.y = -3.320366191076802
+    goal_B.pose.orientation.z = -0.007822402212393793
+    goal_B.pose.orientation.w = 0.9999694045437728
+    
+    goal_S = PoseStamped()
+    goal_S.header.frame_id = 'map'
+    goal_S.header.stamp = navigator.get_clock().now().to_msg()
+    goal_S.pose.position.x = 0.3025282477783394 # 0.3725282477783394
+    goal_S.pose.position.y = -0.35741189949949404 # -0.45741189949949404
+    goal_S.pose.orientation.z = 0.924 # -0.7000945363954414
+    goal_S.pose.orientation.w = 0.383 # -0.7140501663813629
+    
+    # Initialization
     navigator.initialize(initial_pose)
     
     # Go to A
-    a_goal = PoseStamped()
-    a_goal.header.frame_id = 'map'
-    a_goal.header.stamp = navigator.get_clock().now().to_msg()
-    a_goal.pose.position.x = 0.2266274822848437
-    a_goal.pose.position.y = -3.4258465986026695
-    a_goal.pose.orientation.z = -0.6686671777907486
-    a_goal.pose.orientation.w = 0.7435618369344646
-    navigator.go_to_goal(a_goal, blocking = False)
+    navigator.go_to_goal(goal_A, blocking = False)
     
-    # Check aruco insight
+    # - Check aruco insight
     insight = False
     while not navigator.isTaskComplete():
-        temporary_client.get_logger().info(f'checking aruco insight ...')
         block_pose = temporary_client.get_block_center_pose()
         if block_pose is not None:
-            insight = True
-            temporary_client.get_logger().info(f'aruco detected.')
-            break
+            d = math.sqrt(block_pose.pose.position.x ** 2 + block_pose.pose.position.y ** 2)
+            temporary_client.get_logger().info(f'aruco detected {d} meters away.')
+            if d < 1.5:
+                insight = True
+                break
+            else:
+                continue
+        temporary_client.get_logger().info(f'checking aruco insight ...')
     
-    # Approach to block
+    # - Approach to block
     if insight:
+        navigator.cancelTask()
+        
+        # Go to B_frontier
+        navigator.go_to_goal(goal_B_frontier)
+        
+        # Approach, TODO: do not see?
         block_pose = temporary_client.get_block_center_pose()
-        
-        # navigator.cancelTask()
-        while not navigator.isTaskComplete(): # TODO: temporarily substitute cancelTask()
-            feedback = navigator.getFeedback()
-        
-        pass
+        if block_pose is not None:
+            T_0a = pose_to_matrix(block_pose)
+            T_ba = np.dot(T_b0, T_0a)
+            
+            dx, dy = T_ba[0, 3], T_ba[1, 3]
+            x = T_ba[:3, 0]
+            y = T_ba[:3, 1]
+            z = T_ba[:3, 2]
+            dir = np.array([dx, dy, 0])
+            dotmax_axis = x
+            if abs(dir * y) < abs(dir * dotmax_axis):
+                dotmax_axis = y
+            if abs(dir * z) < abs(dir * dotmax_axis):
+                dotmax_axis = z
+            
+            # 确认 base_link 的坐标轴？
+            # dotmax_axis /= np.linalg.norm(dotmax_axis) # normalize
+            dist_base_to_block = 0.35
+            dx += dotmax_axis[0] * dist_base_to_block
+            dy += dotmax_axis[1] * dist_base_to_block
+            
+            # TODO
     else:
         pass # TODO: look around
     
     # Grasp
     temporary_client.grasp_action('grasp')
-    
     while not temporary_client.grasp_query_holding():
         time.sleep(0.5)
     temporary_client.get_logger().info(f'held.')
-        
-    # Judge whether the grasp is successful (by checking the aruco insight)
+    
+    # Check, TODO: Judge whether the grasp is successful (by checking the aruco insight) -> regrasp
 
-    # Face to B
-    temporary_commander.turn_to_yaw(np.deg2rad(0))
-    
     # Go to B
-    b_goal = PoseStamped()
-    b_goal.header.frame_id = 'map'
-    b_goal.header.stamp = navigator.get_clock().now().to_msg()
-    b_goal.pose.position.x = 2.8567487875336247
-    b_goal.pose.position.y = -3.320366191076802
-    b_goal.pose.orientation.z = -0.007822402212393793
-    b_goal.pose.orientation.w = 0.9999694045437728
-    navigator.go_to_goal(b_goal)
+    temporary_commander.turn_to_yaw(np.deg2rad(0))
+    navigator.go_to_goal(goal_B)
     
-    # Release
+    # Release, TODO: in place
     temporary_client.grasp_action('release')
     
-    # Face to S
-    temporary_commander.turn_to_yaw(np.deg2rad(135))
-    
     # Go to S
-    s_goal = PoseStamped()
-    s_goal.header.frame_id = 'map'
-    s_goal.header.stamp = navigator.get_clock().now().to_msg()
-    s_goal.pose.position.x = 0.3025282477783394 # 0.3725282477783394
-    s_goal.pose.position.y = -0.35741189949949404 # -0.45741189949949404
-    s_goal.pose.orientation.z = 0.924 # -0.7000945363954414
-    s_goal.pose.orientation.w = 0.383 # -0.7140501663813629
-    navigator.go_to_goal(s_goal)
+    temporary_commander.turn_to_yaw(np.deg2rad(135))
+    navigator.go_to_goal(goal_S)
 
+    # Shutdown
     navigator.shutdown()
 
 

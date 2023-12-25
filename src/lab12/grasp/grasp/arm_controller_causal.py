@@ -340,7 +340,7 @@ class ArmController(Node):
                     self.action_matrix = radius_oriented_offset(self.action_matrix, -0.04, 0.005)
                     self.action_matrix = substitute_R(self.action_matrix)
                     self.ahead_action_matrix = T_0a
-                    self.ahead_action_matrix = radius_oriented_offset(self.ahead_action_matrix, 0.02, 0.005)
+                    self.ahead_action_matrix = radius_oriented_offset(self.ahead_action_matrix, 0.00, 0.005) # radius_oriented_offset(self.ahead_action_matrix, 0.02, 0.005)
                     self.ahead_action_matrix = substitute_R(self.ahead_action_matrix)
                     
                     # Publish selected aruco pose
