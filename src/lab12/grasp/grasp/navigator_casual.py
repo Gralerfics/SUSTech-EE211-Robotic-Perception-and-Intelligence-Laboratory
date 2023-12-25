@@ -84,11 +84,11 @@ class TemporaryCommander(Node):
     def stop(self):
         self.cmd_vel_pub.publish(Twist())
     
-    def turn_to_yaw(self, yaw, threshold = 0.08):
+    def turn_to_yaw(self, yaw, error_threshold = 0.1, command_threshold = 0.1):
         while self.amcl_pose is None:
             rclpy.spin_once(self)
         
-        controller = PIDController(0.6, 0.03, 0.3, min_output = -0.8, max_output =0.8)
+        controller = PIDController(0.52, 0.03, 0.26, min_output = -0.7, max_output =0.7)
         last_time = self.get_clock().now().to_msg().nanosec / 1e9
         cmd = Twist()
         
@@ -98,14 +98,14 @@ class TemporaryCommander(Node):
             last_time = current_time
             
             yaw_error = self.warp_angle(yaw - self.get_current_yaw())
-            self.get_logger().info(f'yaw: {np.rad2deg(self.get_current_yaw())}, yaw_target: {np.rad2deg(yaw)}, yaw_error: {np.rad2deg(yaw_error)}')
+            # self.get_logger().info(f'yaw: {np.rad2deg(self.get_current_yaw())}, yaw_target: {np.rad2deg(yaw)}, yaw_error: {np.rad2deg(yaw_error)}')
             omega = controller.update(yaw_error, dt)
             cmd.angular.z = omega
             self.cmd_vel_pub.publish(cmd)
             
             rclpy.spin_once(self, timeout_sec = 0.02)
             
-            if abs(yaw_error) <= threshold and abs(omega) <= threshold:
+            if abs(yaw_error) <= error_threshold and abs(omega) <= command_threshold:
                 self.stop()
                 break
 
@@ -200,83 +200,75 @@ def main():
     initial_pose.pose.orientation.w = 0.7000945363954414
     navigator.initialize(initial_pose)
     
-    temporary_commander.turn_to_yaw(0.0)
-    temporary_commander.turn_to_yaw(np.pi)
-    temporary_commander.turn_to_yaw(-np.pi / 2)
+    # Go to A
+    a_goal = PoseStamped()
+    a_goal.header.frame_id = 'map'
+    a_goal.header.stamp = navigator.get_clock().now().to_msg()
+    a_goal.pose.position.x = 0.2266274822848437
+    a_goal.pose.position.y = -3.4258465986026695
+    a_goal.pose.orientation.z = -0.6686671777907486
+    a_goal.pose.orientation.w = 0.7435618369344646
+    navigator.go_to_goal(a_goal, blocking = False)
     
-    # # Go to A
-    # a_goal = PoseStamped()
-    # a_goal.header.frame_id = 'map'
-    # a_goal.header.stamp = navigator.get_clock().now().to_msg()
-    # a_goal.pose.position.x = 0.2266274822848437
-    # a_goal.pose.position.y = -3.4258465986026695
-    # a_goal.pose.orientation.z = -0.6686671777907486
-    # a_goal.pose.orientation.w = 0.7435618369344646
-    # navigator.go_to_goal(a_goal, blocking = False)
+    # Check aruco insight
+    insight = False
+    while not navigator.isTaskComplete():
+        temporary_client.get_logger().info(f'checking aruco insight ...')
+        block_pose = temporary_client.get_block_center_pose()
+        if block_pose is not None:
+            insight = True
+            temporary_client.get_logger().info(f'aruco detected.')
+            break
     
-    # # Check aruco insight
-    # insight = False
-    # while not navigator.isTaskComplete():
-    #     temporary_client.get_logger().info(f'checking aruco insight ...')
-    #     block_pose = temporary_client.get_block_center_pose()
-    #     if block_pose is not None:
-    #         insight = True
-    #         temporary_client.get_logger().info(f'aruco detected.')
-    #         break
-    
-    # # Approach to block
-    # if insight:
-    #     block_pose = temporary_client.get_block_center_pose()
+    # Approach to block
+    if insight:
+        block_pose = temporary_client.get_block_center_pose()
         
-    #     # navigator.cancelTask()
-    #     while not navigator.isTaskComplete(): # TODO: temporarily substitute cancelTask()
-    #         feedback = navigator.getFeedback()
+        # navigator.cancelTask()
+        while not navigator.isTaskComplete(): # TODO: temporarily substitute cancelTask()
+            feedback = navigator.getFeedback()
         
-    #     pass
-    # else:
-    #     pass # TODO: look around
+        pass
+    else:
+        pass # TODO: look around
     
-    # # Grasp
-    # temporary_client.grasp_action('grasp')
+    # Grasp
+    temporary_client.grasp_action('grasp')
     
-    # while not temporary_client.grasp_query_holding():
-    #     time.sleep(0.5)
-    # temporary_client.get_logger().info(f'held.')
+    while not temporary_client.grasp_query_holding():
+        time.sleep(0.5)
+    temporary_client.get_logger().info(f'held.')
         
-    # # Judge whether the grasp is successful (by checking the aruco insight)
+    # Judge whether the grasp is successful (by checking the aruco insight)
 
-    # # Face to B
-    # a_goal.pose.orientation.z = -0.007822402212393793
-    # a_goal.pose.orientation.w = 0.9999694045437728
-    # navigator.go_to_goal(a_goal)
+    # Face to B
+    temporary_commander.turn_to_yaw(np.deg2rad(0))
     
-    # # Go to B
-    # b_goal = PoseStamped()
-    # b_goal.header.frame_id = 'map'
-    # b_goal.header.stamp = navigator.get_clock().now().to_msg()
-    # b_goal.pose.position.x = 2.8567487875336247
-    # b_goal.pose.position.y = -3.320366191076802
-    # b_goal.pose.orientation.z = -0.007822402212393793
-    # b_goal.pose.orientation.w = 0.9999694045437728
-    # navigator.go_to_goal(b_goal)
+    # Go to B
+    b_goal = PoseStamped()
+    b_goal.header.frame_id = 'map'
+    b_goal.header.stamp = navigator.get_clock().now().to_msg()
+    b_goal.pose.position.x = 2.8567487875336247
+    b_goal.pose.position.y = -3.320366191076802
+    b_goal.pose.orientation.z = -0.007822402212393793
+    b_goal.pose.orientation.w = 0.9999694045437728
+    navigator.go_to_goal(b_goal)
     
-    # # Release
-    # temporary_client.grasp_action('release')
+    # Release
+    temporary_client.grasp_action('release')
     
-    # # Face to S
-    # b_goal.pose.orientation.z = 0.924  # 0.9985
-    # b_goal.pose.orientation.w = 0.383  # 0.0547
-    # navigator.go_to_goal(b_goal)
+    # Face to S
+    temporary_commander.turn_to_yaw(np.deg2rad(135))
     
-    # # Go to S
-    # s_goal = PoseStamped()
-    # s_goal.header.frame_id = 'map'
-    # s_goal.header.stamp = navigator.get_clock().now().to_msg()
-    # s_goal.pose.position.x = 0.3725282477783394
-    # s_goal.pose.position.y = -0.45741189949949404
-    # s_goal.pose.orientation.z = -0.7000945363954414
-    # s_goal.pose.orientation.w = -0.7140501663813629
-    # navigator.go_to_goal(s_goal)
+    # Go to S
+    s_goal = PoseStamped()
+    s_goal.header.frame_id = 'map'
+    s_goal.header.stamp = navigator.get_clock().now().to_msg()
+    s_goal.pose.position.x = 0.3025282477783394 # 0.3725282477783394
+    s_goal.pose.position.y = -0.35741189949949404 # -0.45741189949949404
+    s_goal.pose.orientation.z = 0.924 # -0.7000945363954414
+    s_goal.pose.orientation.w = 0.383 # -0.7140501663813629
+    navigator.go_to_goal(s_goal)
 
     navigator.shutdown()
 
