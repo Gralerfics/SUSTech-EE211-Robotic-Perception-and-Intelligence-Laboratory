@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.5)
 project(nav2_my_controller)
 
+# # Default to C99
+# set(CMAKE_C_STANDARD 99)
+
+
+# # Default to C++14
+# set(CMAKE_CXX_STANDARD 14)
+
+# find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(nav2_common REQUIRED)
 find_package(nav2_core REQUIRED)
@@ -12,11 +20,13 @@ find_package(nav_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(tf2 REQUIRED)
 
-nav2_package()
+# nav2_package()
 
 include_directories(
   include
 )
+
+set(library_name ${PROJECT_NAME}_plugin)
 
 set(dependencies
   rclcpp
@@ -29,39 +39,43 @@ set(dependencies
   tf2
 )
 
-add_library(nav2_my_controller SHARED
+add_library(${library_name} SHARED
     src/my_controller.cpp
+    src/DWA_controller.cpp
 )
 
-# prevent pluginlib from using boost
-target_compile_definitions(nav2_my_controller PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
-
-ament_target_dependencies(nav2_my_controller
+ament_target_dependencies(${library_name}
   ${dependencies}
 )
 
-install(TARGETS nav2_my_controller
+target_compile_definitions(${library_name} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
+
+
+pluginlib_export_plugin_description_file(nav2_core controller_plugin.xml)
+
+install(TARGETS ${library_name}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
+  RUNTIME DESTINATION bin/${PROJECT_NAME}
 )
 
 install(DIRECTORY include/
   DESTINATION include/
 )
 
+install(FILES controller_plugin.xml
+  DESTINATION share/${PROJECT_NAME}
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
-  set(ament_cmake_copyright_FOUND TRUE)
+  # set(ament_cmake_copyright_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+
 ament_export_include_directories(include)
-ament_export_libraries(nav2_my_controller)
+ament_export_libraries(${library_name})
 ament_export_dependencies(${dependencies})
-
-pluginlib_export_plugin_description_file(nav2_core nav2_my_controller.xml)
-
 ament_package()
-

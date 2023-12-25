@@ -9,6 +9,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
+#include "nav2_my_controller/DWA_controller.hpp"
 
 namespace nav2_my_controller
 {
@@ -20,10 +21,10 @@ public:
   ~MyController() override = default;
 
   void configure(
-    const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-    std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
-    const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros);
-
+    const rclcpp_lifecycle::LifecycleNode::WeakPtr &,
+    std::string name, 
+    std::shared_ptr<tf2_ros::Buffer>,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS>) override;
 
   void cleanup() override;
   void activate() override;

@@ -9,10 +9,10 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "nav2_my_controller/DWA_controller.hpp"
 
-class LocalController : public rclcpp::Node {
-public:
-    LocalController() : Node("dwa_controller") {
+
+    LocalController::LocalController() : Node("dwa_controller") {
         costmap_sub = create_subscription<nav_msgs::msg::OccupancyGrid>("/local_costmap/costmap", 10,
             std::bind(&LocalController::costmapCallback, this, std::placeholders::_1));
 
@@ -24,7 +24,30 @@ public:
         twist = geometry_msgs::msg::Twist();
     }
 
-private:
+    std::vector<std::vector<double>> LocalController::DWAcontroller() {
+        std::vector<std::vector<double>> trajectory;
+        std::vector<double> best_trajectory;
+        double min_score = std::numeric_limits<double>::max();
+
+        for (double v = v_min; v <= v_max; v += v_resolution) {
+            for (double w = w_min; w <= w_max; w += w_resolution) {
+                std::vector<double> u = {v, w};
+                std::vector<std::vector<double>> Trajectory = TrajectoryCalculate(x, u);
+                double goal_score = goalCost(Trajectory);
+                double vel_score = velocityCost(u);
+                double obs_score = obstacleCost(Trajectory);
+
+                double score = alpha_goal_coef * goal_score + beta_velocity_coef * vel_score + gamma_obstacle_coef * obs_score;
+                if (score <= min_score) {
+                    min_score = score;
+                    best_u = u;
+                    best_Trajectory = Trajectory;
+                }
+            }
+        }
+        return best_Trajectory;
+    }
+
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub;
@@ -46,9 +69,6 @@ private:
     double gamma_obstacle_coef = 1;
     std::vector<double> best_u = {0.0, 0.0};
     std::vector<std::vector<double>> best_Trajectory;
-};
-
-    // Add methods for subscribing to topics and initializing callbacks
 
     void costmapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
         localmap_width = msg->info.width;
@@ -91,7 +111,7 @@ private:
         }
     }
 
-    void getPath(const nav_msgs::Path& path_msg) {
+    void getPath(const nav_msgs::msg::Path& path_msg) {
         for (auto pose : path_msg.poses) {
             PathPose path_pose;
             path_pose.x = pose.pose.position.x;
@@ -162,7 +182,7 @@ private:
         return new_x;
     }
 
-    std::vector<std::vector<double>> Trajectory_Calculate(const std::vector<double>& x, const std::vector<double>& u) {
+    std::vector<std::vector<double>> TrajectoryCalculate(const std::vector<double>& x, const std::vector<double>& u) {
         std::vector<std::vector<double>> trajectory;
         trajectory.push_back(x);
 
@@ -176,31 +196,7 @@ private:
         return trajectory;
     }
 
-    std::vector<std::vector<double>> DWAcontroller() {
-        std::vector<std::vector<double>> trajectory;
-        std::vector<double> best_trajectory;
-        double min_score = std::numeric_limits<double>::max();
-
-        for (double v = v_min; v <= v_max; v += v_resolution) {
-            for (double w = w_min; w <= w_max; w += w_resolution) {
-                std::vector<double> u = {v, w};
-                std::vector<std::vector<double>> Trajectory = Trajectory_Calculate(x, u);
-                double goal_score = Goal_Cost(Trajectory);
-                double vel_score = Velocity_Cost(u);
-                double obs_score = Obstacle_Cost(Trajectory);
-
-                double score = alpha_goal_coef * goal_score + beta_velocity_coef * vel_score + gamma_obstacle_coef * obs_score;
-                if (score <= min_score) {
-                    min_score = score;
-                    best_u = u;
-                    best_Trajectory = Trajectory;
-                }
-            }
-        }
-        return best_Trajectory;
-    }
-
-    // void goToGoal(const Path& path) {
+    // void goToGoal(const nav_msgs::msg::Path& path) {
     //     if (!path.empty()) {
     //         get_path(path);
     //         for (int i = 0; i < goal_numbers; ++i) {
@@ -216,4 +212,5 @@ private:
     //         }
     //     }
     // }
+};
 };

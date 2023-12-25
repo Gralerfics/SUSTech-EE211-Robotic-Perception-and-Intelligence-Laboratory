@@ -294,34 +294,41 @@ def main():
     # Initialization
     navigator.initialize(initial_pose)
     
-    # # Go to A
-    # navigator.go_to_goal(goal_A, blocking = False)
+    # Go to A
+    navigator.go_to_goal(goal_A, blocking = False)
     
-    # # - Check aruco insight
-    # insight = False
-    # while not navigator.isTaskComplete():
-    #     block_pose = temporary_client.get_block_center_pose()
-    #     if block_pose is not None:
-    #         d = math.sqrt(block_pose.pose.position.x ** 2 + block_pose.pose.position.y ** 2)
-    #         temporary_client.get_logger().info(f'aruco detected {d} meters away.')
-    #         if d < 1.5:
-    #             insight = True
-    #             break
-    #         else:
-    #             continue
-    #     temporary_client.get_logger().info(f'checking aruco insight ...')
-    
-    insight = True # TODO: remove
+    # - Check aruco insight
+    insight = False
+    while not navigator.isTaskComplete():
+        block_pose = temporary_client.get_block_center_pose()
+        if block_pose is not None:
+            d = math.sqrt(block_pose.pose.position.x ** 2 + block_pose.pose.position.y ** 2)
+            temporary_client.get_logger().info(f'aruco detected {d} meters away.')
+            if d < 1.5:
+                insight = True
+                break
+            else:
+                continue
+        temporary_client.get_logger().info(f'checking aruco insight ...')
     
     # - Approach to block
     if insight:
-        # navigator.cancelTask()
+        navigator.cancelTask()
         
-        # # Go to B_frontier
-        # navigator.go_to_goal(goal_B_frontier)
+        # Go to B_frontier
+        navigator.go_to_goal(goal_B_frontier)
         
         # Approaching
+        ctrl_linear = PIDController(0.5, 0.01, 0.1, min_output = 0.0, max_output = 0.2)
+        ctrl_angular = PIDController(0.5, 0.01, 0.1, min_output = -0.5, max_output = 0.5)
+        
+        last_time = temporary_commander.get_clock().now().to_msg().nanosec / 1e9
         while True:
+            temporary_commander.get_logger().info(f'approaching ...')
+            current_time = temporary_commander.get_clock().now().to_msg().nanosec / 1e9
+            dt = current_time - last_time
+            last_time = current_time
+            
             block_pose = temporary_client.get_block_center_pose()
             if block_pose is not None:
                 T_0a = pose_to_matrix(block_pose.pose)
@@ -342,13 +349,34 @@ def main():
                 dist_base_to_block = 0.35
                 dx += dotmax_axis[0] * dist_base_to_block
                 dy += dotmax_axis[1] * dist_base_to_block
-                # TODO: cmd
+                
+                d = math.sqrt(dx ** 2 + dy ** 2)
+                delta_theta = math.atan2(dy, dx)
+                
+                v = ctrl_linear.update(d, dt)
+                omega = ctrl_angular.update(delta_theta, dt)
+                
+                temporary_commander.get_logger().info(f'd: {d}, delta_theta: {delta_theta}')
+                temporary_commander.get_logger().info(f'dx: {dx}, dy: {dy}')
+                temporary_commander.get_logger().info(f'v: {v}, omega: {omega}')
+                temporary_commander.get_logger().info(f'x: {x}, y: {y}, z: {z}')
+                temporary_commander.get_logger().info(f'dotmax_axis: {dotmax_axis}')
+                temporary_commander.get_logger().info(f'T_ba: {T_ba}')
+                
+                if d < 0.05:
+                    v = 0.0
+                if delta_theta < 0.01:
+                    omega = 0.0
+                if d < 0.05 and delta_theta < 0.01:
+                    break
+                
+                temporary_commander.cmd_vel(linear_x = v, angular_z = omega)
                 
                 # turn pan_tilt
-                if temporary_commander.aruco_pixel_x < 1280 // 4 or temporary_commander.aruco_pixel_x > 1280 // 4 * 3:
-                    yaw = (1280 // 2 - temporary_commander.aruco_pixel_x) / 1280 * 69.4
-                    yaw = np.clip(yaw, -30, 30)
-                    temporary_commander.update_pan_tilt(yaw = yaw)
+                # if temporary_commander.aruco_pixel_x < 1280 // 4 or temporary_commander.aruco_pixel_x > 1280 // 4 * 3:
+                #     yaw = (1280 // 2 - temporary_commander.aruco_pixel_x) / 1280 * 69.4
+                #     yaw = np.clip(yaw, -30, 30)
+                #     temporary_commander.update_pan_tilt(yaw = yaw)
                 
                 rclpy.spin_once(temporary_commander, timeout_sec = 0.02)
             else:

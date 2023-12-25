@@ -1,0 +1,7 @@
+<library path="nav2_my_controller_plugin">
+    <class name="nav2_my_controller/MyController" type="nav2_my_controller::MyController" base_class_type="nav2_core::Controller">
+        <description>
+            nav2_my_controller
+        </description>
+    </class>
+</library>

@@ -6,6 +6,7 @@
 #include "nav2_util/node_utils.hpp"
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_my_controller/my_controller.hpp"
+#include "nav2_my_controller/DWA_controller.hpp"
 
 using std::hypot;
 using std::min;
@@ -40,8 +41,9 @@ Iter min_by(Iter begin, Iter end, Getter getCompareVal)
 
 void MyController::configure(
   const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-  std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
-  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
+  std::string name, 
+  std::shared_ptr<tf2_ros::Buffer> tf,
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
   node_ = parent;
 
@@ -133,15 +135,15 @@ geometry_msgs::msg::TwistStamped MyController::computeVelocityCommands(
   // If the goal pose is in front of the robot then compute the velocity using the pure pursuit
   // algorithm, else rotate with the max angular velocity until the goal pose is in front of the
   // robot
-  // if (goal_pose.position.x > 0) {
-    auto curvature = 2.0 * goal_pose.position.y /
+  if (goal_pose.position.x > 0) {
+  auto curvature = 2.0 * goal_pose.position.y /
       (goal_pose.position.x * goal_pose.position.x + goal_pose.position.y * goal_pose.position.y);
     linear_vel = desired_linear_vel_;
     angular_vel = desired_linear_vel_ * curvature;
-  // } else {
-  //   linear_vel = 0.0;
-  //   angular_vel = max_angular_vel_;
-  // }
+  } else {
+    linear_vel = 0.0;
+    angular_vel = max_angular_vel_;
+  }
 
   // Create and publish a TwistStamped message with the desired velocity
   geometry_msgs::msg::TwistStamped cmd_vel;
@@ -155,6 +157,7 @@ geometry_msgs::msg::TwistStamped MyController::computeVelocityCommands(
 
   return cmd_vel;
 }
+
 
 void MyController::setPlan(const nav_msgs::msg::Path & path)
 {

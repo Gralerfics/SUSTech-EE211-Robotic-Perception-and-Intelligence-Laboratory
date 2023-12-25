@@ -25,6 +25,7 @@
 
   <export>
     <build_type>ament_cmake</build_type>
+    <nav2_core plugin="${prefix}/controller_plugin.xml" />
   </export>
 
 </package>
