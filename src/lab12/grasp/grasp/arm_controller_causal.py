@@ -291,9 +291,9 @@ class ArmController(Node):
             dx, dy = T_block_center[0, 3], T_block_center[1, 3]
             theta = math.atan2(dy, dx)
             
-            x = T_block_center[0, 3]
-            y = T_block_center[1, 3]
-            z = T_block_center[2, 3]
+            x = T_block_center[:3, 0]
+            y = T_block_center[:3, 1]
+            z = T_block_center[:3, 2]
             zmin_axis = x
             if abs(y[2]) < abs(zmin_axis[2]):
                 zmin_axis = y
@@ -333,7 +333,7 @@ class ArmController(Node):
                     
                     # Inclination of block within -pi/4 ~ pi/4
                     self.inc_correct_factor = -0.025 / (np.pi / 4)
-                    self.inc_yaw = compute_yaw_inclination(self.T_0a)
+                    self.inc_yaw = compute_yaw_inclination(T_0a)
                     
                     # Correct (ahead_)action_matrix translation and compute valid action_matrix orientation
                     self.action_matrix = T_0a
