@@ -337,7 +337,7 @@ class ArmController(Node):
                     
                     # Correct (ahead_)action_matrix translation and compute valid action_matrix orientation
                     self.action_matrix = T_0a
-                    self.action_matrix = radius_oriented_offset(self.action_matrix, -0.05, 0.005)
+                    self.action_matrix = radius_oriented_offset(self.action_matrix, -0.04, 0.005)
                     self.action_matrix = substitute_R(self.action_matrix)
                     self.ahead_action_matrix = T_0a
                     self.ahead_action_matrix = radius_oriented_offset(self.ahead_action_matrix, 0.02, 0.005)
@@ -366,10 +366,10 @@ class ArmController(Node):
                     
                     # Test solution
                     _, solution_found_frontier, solution_valid_frontier, _ = self.matrix_control(self.action_matrix, execute = False)
-                    self.get_logger().info(f'[Frontier] Solution found: {solution_found_frontier}; solution valid: {solution_valid_frontier}.')
                     _, solution_found_ahead, solution_valid_ahead, _ = self.matrix_control(self.ahead_action_matrix, execute = False)
-                    self.get_logger().info(f'[Ahead] Solution found: {solution_found_ahead}; solution valid: {solution_valid_ahead}.')
                     self.is_solved = solution_valid_frontier and solution_valid_ahead
+                    self.get_logger().info(f'[Frontier] Solution found: {solution_found_frontier}; solution valid: {solution_valid_frontier}.')
+                    self.get_logger().info(f'[Ahead] Solution found: {solution_found_ahead}; solution valid: {solution_valid_ahead}.')
                     
                     # Execute solution or block
                     if self.is_solved and self.allow_execute_trigger:
