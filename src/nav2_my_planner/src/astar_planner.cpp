@@ -303,13 +303,15 @@ int AStarPlanner::calcPath(int maxIterations)
 
         if (current.x == goal[0] && current.y == goal[1]) {
             // 路径找到
-            npath = 0;
+            std::vector<Node> tempPath;
             for (Node *node = &allNodes[current.x + nx * current.y]; node != nullptr; node = node->parent) {
-                if (npath < npathbuf) {
-                    pathx[npath] = node->x;
-                    pathy[npath] = node->y;
-                    npath++;
-                }
+                tempPath.push_back(*node);
+            }
+
+            npath = tempPath.size();
+            for (int i = 0; i < npath; ++i) {
+                pathx[i] = tempPath[npath - 1 - i].x; // 反转路径
+                pathy[i] = tempPath[npath - 1 - i].y; // 反转路径
             }
             return npath;
         }
