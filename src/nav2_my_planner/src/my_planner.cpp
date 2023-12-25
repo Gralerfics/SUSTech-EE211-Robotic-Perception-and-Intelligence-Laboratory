@@ -136,62 +136,11 @@ bool AStar::makePlan(
 	planner_->setCostmap(costmap_->getCharMap(), true, true);
 	lock.unlock();
 
-//	worldToMap(goal.position.x, goal.position.y, mx, my);
-//	int map_goal[2];
-//	map_goal[0] = mx;
-//	map_goal[1] = my;
-//
-//	planner_->setStart(map_goal);
-//	planner_->setGoal(map_start);
-//	planner_->calcAStarPlanner();
-
     if (getPlan(goal, plan)) {
         smoothApproachToGoal(goal, plan);
     } else {
         RCLCPP_ERROR(logger_, "Failed to create a plan from potential when a legal potential was found. This shouldn't happen.");
     }
-
-//	double resolution = costmap_->getResolution();
-//	geometry_msgs::msg::Pose p, best_pose;
-//
-//	bool found_legal = false;
-//
-//	p = goal;
-//	double potential = getPointPotential(p.position);
-//	if (potential < POT_HIGH) {
-//		// 已经到达
-//		best_pose = p;
-//		found_legal = true;
-//	} else {
-//		// Goal is not reachable. Trying to find nearest to the goal
-//		// reachable point within its tolerance region
-//		double best_sdist = std::numeric_limits<double>::max();
-//
-//		p.position.y = goal.position.y - tolerance;
-//		while (p.position.y <= goal.position.y + tolerance) {
-//			p.position.x = goal.position.x - tolerance;
-//			while (p.position.x <= goal.position.x + tolerance) {
-//				potential = getPointPotential(p.position);
-//				double sdist = squared_distance(p, goal);
-//				if (potential < POT_HIGH && sdist < best_sdist) {
-//					best_sdist = sdist;
-//					best_pose = p;
-//					found_legal = true;
-//				}
-//				p.position.x += resolution;
-//			}
-//			p.position.y += resolution;
-//		}
-//	}
-
-//	if (found_legal) {
-//		// extract the plan
-//		if (getPlanFromPotential(best_pose, plan)) {
-//			smoothApproachToGoal(best_pose, plan);
-//		} else {
-//			RCLCPP_ERROR(logger_, "Failed to create a plan from potential when a legal potential was found. This shouldn't happen.");
-//		}
-//	}
 
 	return !plan.poses.empty();
 }
@@ -225,9 +174,6 @@ bool AStar::getPlan(
     if (path_len == 0) {
         return false;
     }
-
-//    auto cost = planner_->getLastPathCost();
-//    RCLCPP_DEBUG(logger_, "Path found, %d steps, %f cost\n", path_len, cost);
 
     RCLCPP_DEBUG(logger_, "Path found, %d steps\n", path_len);
 
@@ -273,71 +219,6 @@ void AStar::smoothApproachToGoal(
     goal_copy.pose = goal;
     plan.poses.push_back(goal_copy);
 }
-
-//bool AStar::getPlanFromPotential(
-//	const geometry_msgs::msg::Pose & goal,
-//	nav_msgs::msg::Path & plan
-//) {
-//	// clear the plan, just in case
-//	plan.poses.clear();
-//
-//	// Goal should be in global frame
-//	double wx = goal.position.x;
-//	double wy = goal.position.y;
-//
-//	// the potential has already been computed, so we won't update our copy of the costmap
-//	unsigned int mx, my;
-//	worldToMap(wx, wy, mx, my);
-//
-//	int map_goal[2];
-//	map_goal[0] = mx;
-//	map_goal[1] = my;
-//
-//	planner_->setStart(map_goal);
-//
-//	const int & max_cycles = (costmap_->getSizeInCellsX() >= costmap_->getSizeInCellsY()) ? (costmap_->getSizeInCellsX() * 4) : (costmap_->getSizeInCellsY() * 4);
-//
-//	int path_len = planner_->calcPath(max_cycles);
-//	if (path_len == 0) {
-//		return false;
-//	}
-//
-//	auto cost = planner_->getLastPathCost();
-//	RCLCPP_DEBUG(logger_, "Path found, %d steps, %f cost\n", path_len, cost);
-//
-//	// extract the plan
-//	float * x = planner_->getPathX();
-//	float * y = planner_->getPathY();
-//	int len = planner_->getPathLen();
-//
-//	for (int i = len - 1; i >= 0; --i) {
-//		// convert the plan to world coordinates
-//		double world_x, world_y;
-//		mapToWorld(x[i], y[i], world_x, world_y);
-//
-//		geometry_msgs::msg::PoseStamped pose;
-//		pose.pose.position.x = world_x;
-//		pose.pose.position.y = world_y;
-//		pose.pose.position.z = 0.0;
-//		pose.pose.orientation.x = 0.0;
-//		pose.pose.orientation.y = 0.0;
-//		pose.pose.orientation.z = 0.0;
-//		pose.pose.orientation.w = 1.0;
-//		plan.poses.push_back(pose);
-//	}
-//
-//	return !plan.poses.empty();
-//}
-
-//double AStar::getPointPotential(const geometry_msgs::msg::Point & world_point) {
-//	unsigned int mx, my;
-//	if (!worldToMap(world_point.x, world_point.y, mx, my)) {
-//		return std::numeric_limits<double>::max();
-//	}
-//
-//	unsigned int index = my * planner_->nx + mx;
-//	return planner_->potarr[index];
-//}
 
 bool AStar::worldToMap(double wx, double wy, unsigned int& mx, unsigned int& my) {
 	if (wx < costmap_->getOriginX() || wy < costmap_->getOriginY()) return false;
