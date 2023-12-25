@@ -10,7 +10,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
+from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 from pan_tilt_msgs.msg import PanTiltCmdDeg
 from std_msgs.msg import Int32MultiArray
@@ -18,6 +18,32 @@ from std_msgs.msg import Int32MultiArray
 from grasp_interfaces.srv import GraspAction, GraspQuery
 
 from .tf_reader import TF_Reader
+
+
+def transform_to_matrix(trans):
+    translation = np.array([trans.translation.x, trans.translation.y, trans.translation.z])
+    rotation = [trans.rotation.x, trans.rotation.y, trans.rotation.z, trans.rotation.w]
+    R = tf_transformations.quaternion_matrix(rotation)
+    matrix = np.eye(4)
+    matrix[:3, :3] = R[:3, :3]
+    matrix[:3, 3] = translation
+    return matrix
+
+def pose_to_matrix(pose):
+    translation = np.array([pose.position.x, pose.position.y, pose.position.z])
+    rotation = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+    R = tf_transformations.quaternion_matrix(rotation)
+    matrix = np.eye(4)
+    matrix[:3, :3] = R[:3, :3]
+    matrix[:3, 3] = translation
+    return matrix
+
+def matrix_to_pose(matrix):
+    pose = Pose()
+    pose.position.x, pose.position.y, pose.position.z = matrix[0, 3], matrix[1, 3], matrix[2, 3]
+    quat = tf_transformations.quaternion_from_matrix(matrix)
+    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = quat[0], quat[1], quat[2], quat[3]
+    return pose
 
 
 class PIDController:
@@ -71,6 +97,9 @@ class TemporaryCommander(Node):
         
         self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, QoSProfile(depth = 10, reliability = ReliabilityPolicy.BEST_EFFORT))
         self.odom = None
+        
+        self.block_link_pub = self.create_publisher(PoseStamped, '/block_link', 10)
+        self.target_link_pub = self.create_publisher(PoseStamped, '/target_link', 10)
     
     def warp_angle(self, angle):
         while angle > np.pi:
@@ -217,25 +246,6 @@ class MyNavigator(BasicNavigator):
             return None
 
 
-def transform_to_matrix(trans):
-    translation = np.array([trans.translation.x, trans.translation.y, trans.translation.z])
-    rotation = [trans.rotation.x, trans.rotation.y, trans.rotation.z, trans.rotation.w]
-    R = tf_transformations.quaternion_matrix(rotation)
-    matrix = np.eye(4)
-    matrix[:3, :3] = R[:3, :3]
-    matrix[:3, 3] = translation
-    return matrix
-
-def pose_to_matrix(pose):
-    translation = np.array([pose.position.x, pose.position.y, pose.position.z])
-    rotation = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
-    R = tf_transformations.quaternion_matrix(rotation)
-    matrix = np.eye(4)
-    matrix[:3, :3] = R[:3, :3]
-    matrix[:3, 3] = translation
-    return matrix
-
-
 def main():
     rclpy.init()
     
@@ -304,13 +314,33 @@ def main():
         if block_pose is not None:
             d = math.sqrt(block_pose.pose.position.x ** 2 + block_pose.pose.position.y ** 2)
             temporary_client.get_logger().info(f'aruco detected {d} meters away.')
-            if d < 1.5:
+            if d < 1.2:
                 insight = True
+                navigator.cancelTask()
                 break
             else:
                 continue
         temporary_client.get_logger().info(f'checking aruco insight ...')
     
+    # Approach to block
+    if insight:
+        ctrl_linear = PIDController(0.5, 0.01, 0.1, min_output = 0.0, max_output = 0.2)
+        ctrl_angular = PIDController(0.5, 0.01, 0.1, min_output = -0.5, max_output = 0.5)
+        last_time = temporary_commander.get_clock().now().to_msg().nanosec / 1e9
+        while True:
+            temporary_commander.get_logger().info(f'approaching ...')
+            current_time = temporary_commander.get_clock().now().to_msg().nanosec / 1e9
+            dt = current_time - last_time
+            last_time = current_time
+            
+            block_pose = temporary_client.get_block_center_pose()
+            if block_pose is not None:
+                T_0a = pose_to_matrix(block_pose.pose)
+        
+    else:
+        pass # TODO: look around
+    
+    """
     # - Approach to block
     if insight:
         navigator.cancelTask()
@@ -321,7 +351,6 @@ def main():
         # Approaching
         ctrl_linear = PIDController(0.5, 0.01, 0.1, min_output = 0.0, max_output = 0.2)
         ctrl_angular = PIDController(0.5, 0.01, 0.1, min_output = -0.5, max_output = 0.5)
-        
         last_time = temporary_commander.get_clock().now().to_msg().nanosec / 1e9
         while True:
             temporary_commander.get_logger().info(f'approaching ...')
@@ -340,13 +369,13 @@ def main():
                 z = T_ba[:3, 2]
                 dir = np.array([dx, dy, 0])
                 dotmax_axis = x
-                if np.linalg.norm(dir * y) < np.linalg.norm(dir * dotmax_axis):
+                if np.linalg.norm(dir * y) > np.linalg.norm(dir * dotmax_axis):
                     dotmax_axis = y
-                if np.linalg.norm(dir * z) < np.linalg.norm(dir * dotmax_axis):
+                if np.linalg.norm(dir * z) > np.linalg.norm(dir * dotmax_axis):
                     dotmax_axis = z
                 
                 dotmax_axis /= np.linalg.norm(dotmax_axis) # normalize, TODO: remove?
-                dist_base_to_block = 0.35
+                dist_base_to_block = 0.40
                 dx += dotmax_axis[0] * dist_base_to_block
                 dy += dotmax_axis[1] * dist_base_to_block
                 
@@ -363,11 +392,25 @@ def main():
                 temporary_commander.get_logger().info(f'dotmax_axis: {dotmax_axis}')
                 temporary_commander.get_logger().info(f'T_ba: {T_ba}')
                 
+                block_link_pose = PoseStamped()
+                block_link_pose.header.stamp = temporary_commander.get_clock().now().to_msg()
+                block_link_pose.header.frame_id = 'base_link'
+                block_link_pose.pose = matrix_to_pose(T_ba)
+                temporary_commander.block_link_pub.publish(block_link_pose)
+                
+                target_link_pose = PoseStamped()
+                target_link_pose.header.stamp = temporary_commander.get_clock().now().to_msg()
+                target_link_pose.header.frame_id = 'base_link'
+                target_link_pose.pose.position.x = dx
+                target_link_pose.pose.position.y = dy
+                target_link_pose.pose.orientation.w = 1.0
+                temporary_commander.target_link_pub.publish(target_link_pose)
+                
                 if d < 0.05:
                     v = 0.0
-                if delta_theta < 0.01:
+                if delta_theta < 0.05:
                     omega = 0.0
-                if d < 0.05 and delta_theta < 0.01:
+                if d < 0.05 and delta_theta < 0.05:
                     break
                 
                 temporary_commander.cmd_vel(linear_x = v, angular_z = omega)
@@ -384,9 +427,14 @@ def main():
     else:
         pass # TODO: look around
     
+    while not temporary_client.grasp_query_solved():
+        temporary_commander.cmd_vel(linear_x = 0.1)
+    temporary_commander.stop()
+    
     # Recover the pan_tilt
     # temporary_commander.update_pan_tilt(yaw = 0.0)
     # time.sleep(2.0)
+    """
     
     # Grasp
     temporary_client.grasp_action('grasp')

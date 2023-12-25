@@ -368,8 +368,8 @@ class ArmController(Node):
                     _, solution_found_frontier, solution_valid_frontier, _ = self.matrix_control(self.action_matrix, execute = False)
                     _, solution_found_ahead, solution_valid_ahead, _ = self.matrix_control(self.ahead_action_matrix, execute = False)
                     self.is_solved = solution_valid_frontier and solution_valid_ahead
-                    # self.get_logger().info(f'[Frontier] Solution found: {solution_found_frontier}; solution valid: {solution_valid_frontier}.')
-                    # self.get_logger().info(f'[Ahead] Solution found: {solution_found_ahead}; solution valid: {solution_valid_ahead}.')
+                    self.get_logger().info(f'[Frontier] Solution found: {solution_found_frontier}; solution valid: {solution_valid_frontier}.')
+                    self.get_logger().info(f'[Ahead] Solution found: {solution_found_ahead}; solution valid: {solution_valid_ahead}.')
                     
                     # Execute solution or block
                     if self.is_solved and self.allow_execute_trigger:

@@ -1,12 +1,13 @@
 #include <algorithm>
 #include <string>
 #include <memory>
+#include <cmath>
 
 #include "nav2_core/exceptions.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_my_controller/my_controller.hpp"
-#include "nav2_my_controller/DWA_controller.hpp"
+// #include "nav2_my_controller/DWA_controller.hpp"
 
 using std::hypot;
 using std::min;
@@ -105,7 +106,7 @@ void MyController::deactivate()
 /*
 ##########################################################################
 #                                                                        #
-#                  Implementation of My Controller                       #
+#             Implementation of computeVelocityCommands()                #
 #                                                                        #
 ##########################################################################
 */
@@ -135,25 +136,35 @@ geometry_msgs::msg::TwistStamped MyController::computeVelocityCommands(
   // If the goal pose is in front of the robot then compute the velocity using the pure pursuit
   // algorithm, else rotate with the max angular velocity until the goal pose is in front of the
   // robot
-  if (goal_pose.position.x > 0) {
-  auto curvature = 2.0 * goal_pose.position.y /
-      (goal_pose.position.x * goal_pose.position.x + goal_pose.position.y * goal_pose.position.y);
-    linear_vel = desired_linear_vel_;
-    angular_vel = desired_linear_vel_ * curvature;
-  } else {
-    linear_vel = 0.0;
-    angular_vel = max_angular_vel_;
-  }
+  // if (goal_pose.position.x > 0) {
+  // auto curvature = 2.0 * goal_pose.position.y /
+  //     (goal_pose.position.x * goal_pose.position.x + goal_pose.position.y * goal_pose.position.y);
+  //   linear_vel = desired_linear_vel_;
+  //   angular_vel = desired_linear_vel_ * curvature;
+  // } else {
+  //   linear_vel = 0.0;
+  //   angular_vel = max_angular_vel_;
+  // }
+  /*
+  ##########################################################################
+  #                                                                        #
+  #                  Implementation of My Controller                       #
+  #                                                                        #
+  ##########################################################################
+  */
+  double k_rho = 8.0;
+  double k_alpha = 2.0;
+  double rho = sqrt(pow(goal_pose.position.x - pose.pose.position.x, 2) + pow(goal_pose.position.y - pose.pose.position.y, 2));
+  double alpha = atan2(goal_pose.position.y - pose.pose.position.y, goal_pose.position.x - pose.pose.position.x);
+  linear_vel = k_rho * rho;
+  angular_vel = k_alpha * alpha;
 
   // Create and publish a TwistStamped message with the desired velocity
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = pose.header.frame_id;
   cmd_vel.header.stamp = clock_->now();
   cmd_vel.twist.linear.x = linear_vel;
-  cmd_vel.twist.angular.z = max(
-    -1.0 * abs(max_angular_vel_), min(
-      angular_vel, abs(
-        max_angular_vel_)));
+  cmd_vel.twist.angular.z = max(-1.0 * abs(max_angular_vel_), min(angular_vel, abs(max_angular_vel_)));
 
   return cmd_vel;
 }

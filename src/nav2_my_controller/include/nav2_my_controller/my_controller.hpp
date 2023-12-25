@@ -4,12 +4,13 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <cmath>
 
 #include "nav2_core/controller.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
-#include "nav2_my_controller/DWA_controller.hpp"
+// #include "nav2_my_controller/DWA_controller.hpp"
 
 namespace nav2_my_controller
 {

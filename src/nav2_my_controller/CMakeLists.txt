@@ -41,7 +41,7 @@ set(dependencies
 
 add_library(${library_name} SHARED
     src/my_controller.cpp
-    src/DWA_controller.cpp
+    # src/DWA_controller.cpp
 )
 
 ament_target_dependencies(${library_name}

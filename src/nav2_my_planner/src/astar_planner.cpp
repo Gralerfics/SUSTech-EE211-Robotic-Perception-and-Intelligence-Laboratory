@@ -341,3 +341,5 @@ namespace nav2_my_planner {
     }
 
 }
+
+}

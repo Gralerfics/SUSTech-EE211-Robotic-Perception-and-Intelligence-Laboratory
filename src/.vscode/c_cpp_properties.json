@@ -1,0 +1,34 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/tony/ros2_ws/install/pan_tilt_msgs/include/**",
+        "/home/tony/ros2_ws/install/interbotix_xs_rviz/include/**",
+        "/home/tony/ros2_ws/install/interbotix_xs_ros_control/include/**",
+        "/home/tony/ros2_ws/install/interbotix_xs_msgs/include/**",
+        "/home/tony/ros2_ws/install/interbotix_xs_driver/include/**",
+        "/home/tony/ros2_ws/install/interbotix_perception_msgs/include/**",
+        "/home/tony/ros2_ws/install/interbotix_moveit_interface_msgs/include/**",
+        "/home/tony/ros2_ws/install/dynamixel_workbench_toolbox/include/**",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/ros2_aruco_interfaces/include/**",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/nav2_my_planner/include/**",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/nav2_my_controller/include/**",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/grasp_interfaces/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/src/nav2_my_controller/include/**",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/src/nav2_my_planner/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

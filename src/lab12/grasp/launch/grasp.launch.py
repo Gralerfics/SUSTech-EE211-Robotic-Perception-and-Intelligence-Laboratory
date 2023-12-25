@@ -25,6 +25,11 @@ def generate_launch_description():
         executable='grasp'
     )
     
+    grasp_casual_node = Node(
+        package='grasp',
+        executable='grasp_causal'
+    )
+    
     navigator_node = Node(
         package='grasp',
         executable='navigator'
@@ -32,7 +37,8 @@ def generate_launch_description():
     
     return LaunchDescription([
         aruco_node,
-        grasp_node,
+        # grasp_node,
+        grasp_casual_node,
         navigator_node
     ])
 

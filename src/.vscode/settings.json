@@ -1,0 +1,34 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/tony/ros2_ws/install/witmotion_ros_driver/lib/python3.10/site-packages",
+        "/home/tony/ros2_ws/install/pan_tilt_msgs/local/lib/python3.10/dist-packages",
+        "/home/tony/ros2_ws/install/interbotix_xs_modules/lib/python3.10/site-packages",
+        "/home/tony/ros2_ws/install/interbotix_perception_modules/lib/python3.10/site-packages",
+        "/home/tony/ros2_ws/install/interbotix_xs_msgs/local/lib/python3.10/dist-packages",
+        "/home/tony/ros2_ws/install/interbotix_perception_msgs/local/lib/python3.10/dist-packages",
+        "/home/tony/ros2_ws/install/interbotix_moveit_interface_msgs/local/lib/python3.10/dist-packages",
+        "/home/tony/ros2_ws/install/interbotix_common_modules/lib/python3.10/site-packages",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/ros2_aruco_interfaces/local/lib/python3.10/dist-packages",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/ros2_aruco/lib/python3.10/site-packages",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/grasp_interfaces/local/lib/python3.10/dist-packages",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/grasp/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/tony/ros2_ws/install/witmotion_ros_driver/lib/python3.10/site-packages",
+        "/home/tony/ros2_ws/install/pan_tilt_msgs/local/lib/python3.10/dist-packages",
+        "/home/tony/ros2_ws/install/interbotix_xs_modules/lib/python3.10/site-packages",
+        "/home/tony/ros2_ws/install/interbotix_perception_modules/lib/python3.10/site-packages",
+        "/home/tony/ros2_ws/install/interbotix_xs_msgs/local/lib/python3.10/dist-packages",
+        "/home/tony/ros2_ws/install/interbotix_perception_msgs/local/lib/python3.10/dist-packages",
+        "/home/tony/ros2_ws/install/interbotix_moveit_interface_msgs/local/lib/python3.10/dist-packages",
+        "/home/tony/ros2_ws/install/interbotix_common_modules/lib/python3.10/site-packages",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/ros2_aruco_interfaces/local/lib/python3.10/dist-packages",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/ros2_aruco/lib/python3.10/site-packages",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/grasp_interfaces/local/lib/python3.10/dist-packages",
+        "/home/tony/MyFiles_ClickHere/Workspace/gralerfics/install/grasp/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}
