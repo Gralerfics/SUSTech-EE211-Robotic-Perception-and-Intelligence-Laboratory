@@ -112,7 +112,7 @@ public:
 
 	float last_path_cost_;  /**< Holds the cost of the path found the last time A* was called */
 
-	int calcPath(int n, int * st = NULL);
+	int calcPath(int maxcycles);
 
 	float gradCell(int n);  /**< calculates gradient at cell <n>, returns norm */
 

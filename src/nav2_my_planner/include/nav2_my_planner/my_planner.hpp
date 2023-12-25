@@ -54,6 +54,11 @@ protected:
 		nav_msgs::msg::Path & plan
 	);
 
+    bool getPlan(
+            const geometry_msgs::msg::Pose & goal,
+            nav_msgs::msg::Path & plan
+    );
+
 	void smoothApproachToGoal(
 		const geometry_msgs::msg::Pose & goal,
 		nav_msgs::msg::Path & plan
