@@ -36,7 +36,7 @@ class ArmController(Node):
         self.arm_group_command = JointGroupCommand()
         
         self.cnt = 0
-        self.thred = 0.1
+        self.thred = 0.12
         self.joint_pos = []
         self.num_joints = 4
         
@@ -169,7 +169,7 @@ class ArmController(Node):
     def go_handup(self):
         return self.set_group_pos([1.5, self.shoulder_offset, -1.4, 0.0])
 
-    def matrix_control(self, T_sd, custom_guess: list[float] = None, execute: bool = True, custom_joints = None, delay = 1.0):
+    def matrix_control(self, T_sd, custom_guess: list[float] = None, execute: bool = True, custom_joints = None, waist_offset = 0.0, delay = 1.0):
         initial_guesses = self.initial_guesses if custom_guess is None else [custom_guess]
         for guess in initial_guesses:
             theta_list, solution_found = mr.IKinSpace(
@@ -194,6 +194,9 @@ class ArmController(Node):
                 #     joint_list[0] *= 1.09
                 joint_list[0] += 0.06 # 0.075 # 0.015
                 # TODO END
+                
+                # waist offset
+                joint_list[0] += waist_offset
                 
                 # substitute custom joints
                 if (custom_joints is not None) and (len(custom_joints) == self.num_joints):
@@ -284,6 +287,24 @@ class ArmController(Node):
                 [ 0,   0, 0,  1]
             ])
         
+        def compute_yaw_inclination(T_block_center):
+            dx, dy = T_block_center[0, 3], T_block_center[1, 3]
+            theta = math.atan2(dy, dx)
+            
+            x = T_block_center[0, 3]
+            y = T_block_center[1, 3]
+            z = T_block_center[2, 3]
+            zmin_axis = x
+            if abs(y[2]) < abs(zmin_axis[2]):
+                zmin_axis = y
+            if abs(z[2]) < abs(zmin_axis[2]):
+                zmin_axis = z
+            beta = math.atan2(zmin_axis[1], zmin_axis[0])
+            
+            yaw_relative = beta - theta
+            yaw_regular = (yaw_relative - np.pi / 4) % (np.pi / 2) - np.pi / 4
+            return yaw_regular
+        
         if len(self.joint_pos) == 7:
             if self.machine_state == 'INIT':
                 self.get_logger().info('Initializing pan tilt and arm ...')
@@ -310,9 +331,13 @@ class ArmController(Node):
                     R_0a = T_0a[:3, :3]
                     t_0a = T_0a[:3, 3]
                     
-                    # Correct action_matrix translation and compute valid action_matrix orientation
+                    # Inclination of block within -pi/4 ~ pi/4
+                    self.inc_correct_factor = -0.025 / (np.pi / 4)
+                    self.inc_yaw = compute_yaw_inclination(self.T_0a)
+                    
+                    # Correct (ahead_)action_matrix translation and compute valid action_matrix orientation
                     self.action_matrix = T_0a
-                    self.action_matrix = radius_oriented_offset(self.action_matrix, -0.06, 0.005)
+                    self.action_matrix = radius_oriented_offset(self.action_matrix, -0.05, 0.005)
                     self.action_matrix = substitute_R(self.action_matrix)
                     self.ahead_action_matrix = T_0a
                     self.ahead_action_matrix = radius_oriented_offset(self.ahead_action_matrix, 0.02, 0.005)
@@ -356,9 +381,10 @@ class ArmController(Node):
             elif self.machine_state == 'TWIST_WAIST':
                 self.get_logger().info('Twisting waist ...')
                 self.gripper(1.5, 1.0)
-                _, solution_found, solution_valid, reached = self.matrix_control(
+                _, _, _, reached = self.matrix_control(
                     self.action_matrix,
                     custom_joints = [None, self.shoulder_offset, -1.4, 0.0],
+                    waist_offset = self.inc_yaw * self.inc_correct_factor,
                     delay = 0.5
                 )
                 if reached:
@@ -366,24 +392,15 @@ class ArmController(Node):
                     self.machine_state = 'GO_FRONTIER'
             elif self.machine_state == 'GO_FRONTIER':
                 self.get_logger().info('Going frontier ...')
-                _, solution_found, solution_valid, reached = self.matrix_control(self.action_matrix, delay = 1.0)
+                self.get_logger().info(f'inc_yaw: {self.inc_yaw}, offset: {self.inc_yaw * self.inc_correct_factor}')
+                _, _, _, reached = self.matrix_control(self.action_matrix, waist_offset = self.inc_yaw * self.inc_correct_factor, delay = 1.0)
                 if reached:
                     self.get_logger().info('done.')
                     self.machine_state = 'GO_AHEAD'
-                    # self.action_matrix = radius_oriented_offset(self.action_matrix, 0.1, 0.00)
-                    
-                    # if len(self.joint_pos) == 7:
-                    #     t1 = np.pi / 2 - self.joint_pos[1]
-                    #     t2 = -np.pi / 2 - self.joint_pos[2]
-                    #     h = np.sin(t1) + np.sin(t1 + t2)
-                    #     self.nt1 = np.arcsin(h) - np.pi / 2
-                    #     self.nt2 = -np.arcsin(h) + np.pi / 2
-                    #     self.get_logger().info(f't1: {np.rad2deg(t1)}, t2: {np.rad2deg(t2)}, h: {h}, nt1: {np.rad2deg(self.nt1)}, nt2: {np.rad2deg(self.nt2)}')
-                    #     self.machine_state = 'GO_AHEAD'
             elif self.machine_state == 'GO_AHEAD':
                 self.get_logger().info('Going ahead ...')
-                # reached = self.set_single_pos('shoulder', -self.nt1) and self.set_single_pos('elbow', -self.nt2) and self.set_single_pos('wrist_angle', 0.0)
-                _, solution_found, solution_valid, reached = self.matrix_control(self.ahead_action_matrix, delay = 1.0)
+                self.get_logger().info(f'inc_yaw: {self.inc_yaw}, offset: {self.inc_yaw * self.inc_correct_factor}')
+                _, _, _, reached = self.matrix_control(self.ahead_action_matrix, waist_offset = self.inc_yaw * self.inc_correct_factor, delay = 1.0)
                 if reached:
                     self.get_logger().info('done.')
                     self.gripper(0.7, 1.0)
