@@ -280,8 +280,8 @@ def main():
     goal_A = PoseStamped()
     goal_A.header.frame_id = 'map'
     goal_A.header.stamp = navigator.get_clock().now().to_msg()
-    goal_A.pose.position.x = 0.2266274822848437
-    goal_A.pose.position.y = -3.4258465986026695
+    goal_A.pose.position.x = 0.2766274822848437 # 0.2266274822848437
+    goal_A.pose.position.y = -3.3258465986026695 # -3.4258465986026695
     goal_A.pose.orientation.z = -0.6686671777907486
     goal_A.pose.orientation.w = 0.7435618369344646
     
@@ -297,7 +297,7 @@ def main():
     goal_B.header.frame_id = 'map'
     goal_B.header.stamp = navigator.get_clock().now().to_msg()
     goal_B.pose.position.x = 2.8567487875336247
-    goal_B.pose.position.y = -3.320366191076802
+    goal_B.pose.position.y = -3.200366191076802 # -3.320366191076802
     goal_B.pose.orientation.z = -0.007822402212393793
     goal_B.pose.orientation.w = 0.9999694045437728
     
@@ -318,6 +318,7 @@ def main():
     navigator.go_to_goal(goal_A, blocking = False)
     
     # Check aruco insight (while going to A)
+    insight = False
     while not navigator.isTaskComplete():
         block_pose = temporary_client.get_block_center_pose()
         if block_pose is not None:
@@ -342,9 +343,9 @@ def main():
     # Turn to block
     temporary_client.get_logger().info('Turn to block.')
     block_pose = temporary_client.get_block_center_pose()
-    T_0a = pose_to_matrix(block_pose.pose)
-    T_ba = np.dot(T_b0, T_0a)
-    dx, dy = T_ba[0, 3], T_ba[1, 3]
+    # T_0a = pose_to_matrix(block_pose.pose)
+    # T_ba = np.dot(T_b0, T_0a)
+    # dx, dy = T_ba[0, 3], T_ba[1, 3]
     while temporary_commander.aruco_pixel_x is None or temporary_commander.aruco_pixel_x < 1280 * 2 // 5 or temporary_commander.aruco_pixel_x > 1280 * 3 // 5:
         rclpy.spin_once(temporary_commander, timeout_sec = 0.1)
         temporary_commander.cmd_vel(angular_z = 0.02)

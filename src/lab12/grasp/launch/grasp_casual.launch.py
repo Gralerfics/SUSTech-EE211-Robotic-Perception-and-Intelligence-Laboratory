@@ -38,7 +38,7 @@ def generate_launch_description():
     return LaunchDescription([
         aruco_node,
         grasp_casual_node,
-        navigator_casual_node
-        # navigator_casual_random_node
+        # navigator_casual_node
+        navigator_casual_random_node
     ])
 
