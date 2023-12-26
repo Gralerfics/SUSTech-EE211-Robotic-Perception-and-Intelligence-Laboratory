@@ -30,9 +30,15 @@ def generate_launch_description():
         executable='navigator_casual'
     )
     
+    navigator_casual_random_node = Node(
+        package='grasp',
+        executable='navigator_casual_random'
+    )
+    
     return LaunchDescription([
         aruco_node,
         grasp_casual_node,
         navigator_casual_node
+        # navigator_casual_random_node
     ])
 

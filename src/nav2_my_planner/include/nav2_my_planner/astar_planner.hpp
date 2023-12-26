@@ -50,7 +50,6 @@ namespace nav2_my_planner {
 Returns length of plan if found, and fills an array with x,y interpolated
 positions at about 1/2 cell resolution; else returns 0.
 */
-
 int create_nav_plan_astar(
   const COSTTYPE * costmap, int nx, int ny,
   int * goal, int * start,
@@ -113,7 +112,7 @@ public:
 
 	float last_path_cost_;  /**< Holds the cost of the path found the last time A* was called */
 
-	int calcPath(int n);
+	int calcPath(int n, int * st = NULL);
 
 	float gradCell(int n);  /**< calculates gradient at cell <n>, returns norm */
 

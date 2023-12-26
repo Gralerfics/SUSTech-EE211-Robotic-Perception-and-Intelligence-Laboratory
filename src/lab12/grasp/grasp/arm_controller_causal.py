@@ -81,7 +81,7 @@ class ArmController(Node):
     def grasp_is_solved_callback(self, request, response):
         response.result = self.is_solved if self.is_solved is not None else False
         self.is_solved = None
-        self.get_logger().info(f'grasp_is_solved() called -> {response.result}')
+        # self.get_logger().info(f'grasp_is_solved() called -> {response.result}')
         return response
 
     def grasp_is_holding_callback(self, request, response):

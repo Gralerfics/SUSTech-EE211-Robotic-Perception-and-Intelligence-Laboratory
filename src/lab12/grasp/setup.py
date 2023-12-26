@@ -27,7 +27,8 @@ setup(
             'grasp_causal = grasp.grasp_causal:main',
             'navigator = grasp.navigator:main',
             'my_navigator = grasp.my_navigator:main',
-            'navigator_casual = grasp.navigator_casual:main'
+            'navigator_casual = grasp.navigator_casual:main',
+            'navigator_casual_random = grasp.navigator_casual_random:main'
         ],
     },
 )

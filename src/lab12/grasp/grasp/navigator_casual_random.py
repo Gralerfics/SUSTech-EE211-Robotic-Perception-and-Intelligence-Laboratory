@@ -90,7 +90,7 @@ class TemporaryCommander(Node):
         self.pan_tilt_yaw = 0.0
         
         self.aruco_pixel_sub = self.create_subscription(Int32MultiArray, '/aruco_pixel', self.aruco_pixel_callback, 10)
-        self.aruco_pixel_x, self.aruco_pixel_y = 1280 // 2, 720 // 2
+        self.aruco_pixel_x, self.aruco_pixel_y = None, None
         
         self.amcl_pose_sub = self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10)
         self.amcl_pose = None
@@ -318,7 +318,6 @@ def main():
     navigator.go_to_goal(goal_A, blocking = False)
     
     # Check aruco insight (while going to A)
-    insight = False
     while not navigator.isTaskComplete():
         block_pose = temporary_client.get_block_center_pose()
         if block_pose is not None:
@@ -332,25 +331,31 @@ def main():
                 continue
         temporary_client.get_logger().info(f'checking aruco insight ...')
     
-    # # Look around if not insight, TODO: see navigator_casual
-    # if not insight:
-    #     while temporary_client.get_block_center_pose() is None:
-    #         temporary_commander.cmd_vel(angular_z = 0.12)
-    #     temporary_commander.stop()
+    # Look around if not insight
+    temporary_client.get_logger().info('Look around.')
+    if not insight:
+        while temporary_client.get_block_center_pose() is None:
+            temporary_commander.cmd_vel(angular_z = 0.06)
+        temporary_commander.stop()
+    time.sleep(1.5)
     
     # Turn to block
+    temporary_client.get_logger().info('Turn to block.')
     block_pose = temporary_client.get_block_center_pose()
     T_0a = pose_to_matrix(block_pose.pose)
     T_ba = np.dot(T_b0, T_0a)
     dx, dy = T_ba[0, 3], T_ba[1, 3]
-    while temporary_commander.amcl_pose is None:
-        rclpy.spin_once(temporary_commander)
-    yaw = temporary_commander.warp_angle(temporary_commander.get_current_yaw() + np.arctan2(dy, dx))
-    temporary_commander.get_logger().info(f'turn to yaw: {np.rad2deg(yaw)}, current_yaw: {np.rad2deg(temporary_commander.get_current_yaw())}, dx: {dx}, dy: {dy}')
-    temporary_commander.turn_to_yaw(yaw)
+    while temporary_commander.aruco_pixel_x is None or temporary_commander.aruco_pixel_x < 1280 * 2 // 5 or temporary_commander.aruco_pixel_x > 1280 * 3 // 5:
+        rclpy.spin_once(temporary_commander, timeout_sec = 0.1)
+        temporary_commander.cmd_vel(angular_z = 0.02)
+    temporary_commander.stop()
+    # yaw = temporary_commander.warp_angle(temporary_commander.get_current_yaw() + np.arctan2(dy, dx))
+    # temporary_commander.get_logger().info(f'turn to yaw: {np.rad2deg(yaw)}, current_yaw: {np.rad2deg(temporary_commander.get_current_yaw())}, dx: {dx}, dy: {dy}')
+    # temporary_commander.turn_to_yaw(yaw)
     time.sleep(1.0)
     
     # Move slowly
+    temporary_client.get_logger().info('Move slowly.')
     while True:
         is_solved = temporary_client.grasp_query_solved()
         if is_solved:
@@ -360,6 +365,7 @@ def main():
     time.sleep(1.5)
     
     # Grasp
+    temporary_client.get_logger().info('Grasp.')
     temporary_client.grasp_action('grasp')
     while not temporary_client.grasp_query_holding():
         time.sleep(0.5)
