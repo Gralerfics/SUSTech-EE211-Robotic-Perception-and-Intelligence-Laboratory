@@ -346,7 +346,7 @@ def main():
     # T_0a = pose_to_matrix(block_pose.pose)
     # T_ba = np.dot(T_b0, T_0a)
     # dx, dy = T_ba[0, 3], T_ba[1, 3]
-    while temporary_commander.aruco_pixel_x is None or temporary_commander.aruco_pixel_x < 1280 * 2 // 5 or temporary_commander.aruco_pixel_x > 1280 * 3 // 5:
+    while temporary_commander.aruco_pixel_x is None or temporary_commander.aruco_pixel_x < 1280 * 1 // 3 or temporary_commander.aruco_pixel_x > 1280 * 2 // 3:
         rclpy.spin_once(temporary_commander, timeout_sec = 0.1)
         temporary_commander.cmd_vel(angular_z = 0.02)
     temporary_commander.stop()
